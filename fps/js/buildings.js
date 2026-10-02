@@ -758,7 +758,7 @@ const Buildings = {
       sg.position.set(tx - 0.2, kt.y + 2.4 + 0.3 * sc, tz); sg.rotation.y = -Math.PI / 2;
       World.scene.add(sg);
     });
-    L.spawn = { x: x0 - 1.5, z, yaw: -Math.PI / 2 };
+    L.spawn = { x: x0 - 2.6, z, yaw: -Math.PI / 2 };
   },
 
   // Casas e cabanas isoladas pelo mapa.

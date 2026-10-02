@@ -1,3 +1,11 @@
+# diaxo
+
+Projetos para abrir direto no navegador, sem etapa de build:
+
+- **[Zona Morta](fps/)** (`fps/index.html`): FPS de sobrevivência em mundo aberto no estilo Unturned, com
+  zumbis, saque, veículos e 112 armas de fogo reais. Veja [fps/README.md](fps/README.md).
+- **Árvore ao vento** (`index.html`): descrita abaixo.
+
 # Árvore ao vento
 
 Simulação de uma árvore balançando ao vento enquanto suas folhas se soltam, flutuam e se acumulam no chão.

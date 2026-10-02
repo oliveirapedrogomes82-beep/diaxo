@@ -432,7 +432,7 @@ const WeaponCtl = {
     if (k === 'pistol' || k === 'revolver') return [0.15, -0.115, -0.46];
     if (k === 'bullpup' || k === 'p90') return [0.17, -0.15, -0.56];
     if (k === 'rpg') return [0.2, -0.1, -0.3];
-    if (k === 'bow') return [-0.03, -0.06, -0.58];
+    if (k === 'bow') return [-0.07, -0.06, -0.62];
     return [0.18, -0.14, -0.5];
   },
 
@@ -470,6 +470,7 @@ const WeaponCtl = {
       this.placeArm(this.armR, new THREE.Vector3(0.3, -0.55, 0.0), this.handR.position);
       this.placeArm(this.armL, new THREE.Vector3(-0.3, -0.55, 0.0), this.handL.position);
       this.armL.visible = this.handL.visible = true;
+      this.armR.visible = this.handR.visible = true;
       this.updateShells(dt);
       return;
     }
@@ -527,6 +528,7 @@ const WeaponCtl = {
       // arco tensionado
       if (d.id === 'arco' && g.parts.mag) g.parts.mag.position.z = g.info.magPos.z + this.bowDraw / d.draw * 0.22;
       if (d.id === 'arco' && g.parts.mag) g.parts.mag.visible = this.cur.ammo > 0;
+      if (d.id === 'arco') rot.z += 0.22 * (1 - this.adsT);
       pos.z += this.kick; rot.x += this.kickRot;
     }
     // sacar
@@ -546,6 +548,7 @@ const WeaponCtl = {
     const hr = this.pivot.localToWorld(d.id === 'arco' ? new THREE.Vector3(0.012, 0.03, 0.38 + (this.bowDraw / d.draw) * 0.22) : grip);
     this.handR.position.copy(hr); this.handR.quaternion.copy(this.pivot.quaternion);
     this.placeArm(this.armR, new THREE.Vector3(0.3, -0.55, 0.02), hr);
+    this.armR.visible = this.handR.visible = d.id !== 'arco';
     const twoHands = this.gun && !(this.reload && this.reload.kind === 'mag' && this.reload.t / this.reload.T > 0.15 && this.reload.t / this.reload.T < 0.72);
     if (twoHands || d.id === 'arco') {
       const hl = this.pivot.localToWorld(d.id === 'arco' ? new THREE.Vector3(0, 0, 0) : sup);

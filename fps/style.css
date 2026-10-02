@@ -207,10 +207,30 @@ kbd { background: rgba(255,255,255,.1); border: 1px solid var(--line); border-ra
 #t-buttons button { width: 54px; height: 54px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.35); font-size: 18px; font-weight: 700; }
 #t-buttons button.big { grid-row: span 2; height: 116px; border-radius: 28px; background: rgba(226,81,63,.35); }
 #t-buttons button.on { background: rgba(232,163,61,.45); }
-body.touch #stats { transform: scale(.85); transform-origin: left top; bottom: auto; top: 60px; }
-body.touch #weapon { bottom: auto; top: 70px; }
-body.touch #hotbar { bottom: auto; top: 160px; flex-direction: column; }
+body.touch #stats { transform: scale(.8); transform-origin: left top; bottom: auto; top: 60px; }
+body.touch #weapon { bottom: auto; top: 64px; padding: 4px 10px; min-width: 150px; }
+body.touch #w-ammo { font-size: 22px; }
+body.touch #hotbar { bottom: auto; top: 44px; right: auto; left: 50%; transform: translateX(-50%); }
+body.touch .slot { width: 64px; height: 34px; font-size: 10px; }
+body.touch .slot div { bottom: 2px; max-height: 13px; white-space: nowrap; text-overflow: ellipsis; }
+body.touch #notes { top: 86px; left: 50%; transform: translateX(-50%); align-items: center; max-width: 56vw; }
+body.touch .note { font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+body.touch #prompt { top: auto; bottom: 18px; }
+body.touch #t-buttons { right: 12px; bottom: 12px; grid-template-columns: repeat(4, 50px); gap: 7px; }
+body.touch #t-buttons button { width: 50px; height: 50px; font-size: 16px; }
+body.touch #t-buttons button.big { grid-column: 4; grid-row: 2 / span 2; height: 107px; }
+body.touch #veh { bottom: auto; top: 96px; }
 
+@media (max-height: 560px) {
+  .logo.big { font-size: 40px; }
+  .tagline { margin: 4px 0 10px; font-size: 13px; }
+  .menu-col { gap: 6px; }
+  .mbtn { padding: 7px 14px; font-size: 15px; }
+  .mbtn small { font-size: 11.5px; }
+  #menu { align-items: flex-start; padding-top: max(12px, env(safe-area-inset-top)); overflow-y: auto; }
+  .menu-foot { display: none; }
+  .panel { height: 96vh; }
+}
 @media (max-width: 760px) {
   .cols { grid-template-columns: 1fr; height: auto; }
   .ars-body { grid-template-columns: 1fr; overflow: auto; }

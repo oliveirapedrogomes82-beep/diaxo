@@ -18,7 +18,7 @@ const Vehicles = {
   spawn(type, x, z, yaw, fuelFrac = null) {
     const def = VEHICLES[type];
     const mdl = Models.vehicle(type, U.pick(def.colors));
-    const y = Phys.support(x, z, 1, 300);
+    const y = Phys.ground(x, z, 1);
     const v = {
       type, def, mdl, pos: new THREE.Vector3(x, y, z), yaw, speed: 0, steer: 0, hp: def.hp, fuel: def.fuel * (fuelFrac ?? (0.15 + Math.random() * 0.6)),
       pitch: 0, roll: 0, wheelRot: 0, vy: 0, dead: false, col: null, lights: false,

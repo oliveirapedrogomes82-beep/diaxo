@@ -19,7 +19,7 @@ const Player = {
 
   reset(x, z, yaw = 0) {
     const b = this.body;
-    b.p.set(x, Phys.support(x, z, 0.3, 500), z);
+    b.p.set(x, Phys.ground(x, z), z);
     b.v.set(0, 0, 0);
     this.yaw = yaw; this.pitch = 0; this.recoilP = 0;
     this.stance = 'stand'; b.h = 1.8; this.eyeY = 1.62;
@@ -385,6 +385,7 @@ const Player = {
 
   // Consumíveis.
   use(st) {
+    if (!st) return;
     const d = itemDef(st.id);
     if (!d) return;
     if (['food', 'drink', 'med'].includes(d.type)) {
@@ -435,7 +436,8 @@ const Player = {
   quickHeal() {
     const meds = this.inv.bag.filter((s) => { const d = itemDef(s.id); return d.type === 'med' && (d.health || d.bleed); });
     if (!meds.length) { UI.note('Nenhum item médico.', 'warn'); return; }
-    let best = null, score = -1;
+    if (this.hp >= 100 && !this.bleeding) { UI.note('Você não está ferido.', 'info'); return; }
+    let best = meds[0], score = -Infinity;
     for (const s of meds) {
       const d = itemDef(s.id);
       let sc = (d.bleed && this.bleeding ? 100 : 0) + Math.min(d.health || 0, 100 - this.hp) - (d.time || 1) * 2;

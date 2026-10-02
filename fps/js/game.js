@@ -15,6 +15,7 @@ const Input = {
     addEventListener('blur', () => { this.k = {}; this.mb = [false, false, false]; });
     addEventListener('mousedown', (e) => {
       if (e.target.closest && e.target.closest('.panel, .screen, button')) return;
+      if (Game.state === 'play' && !document.pointerLockElement && !Game.noLock && !Touch.on) return; // clique para capturar o mouse
       this.mb[e.button] = true; this.mbPressed[e.button] = true;
     });
     addEventListener('mouseup', (e) => { this.mb[e.button] = false; });
@@ -77,7 +78,8 @@ const Game = {
     this.applySettings();
     addEventListener('resize', () => this.resize());
     document.addEventListener('pointerlockchange', () => this.onLockChange());
-    renderer.domElement.addEventListener('click', () => { if (this.state === 'play' && !UI.blocking()) this.lock(); });
+    document.addEventListener('pointerlockerror', () => { if (this.pendingGesture && ++this.lockFails >= 2 && !this.noLock) { this.noLock = true; UI.note('Captura do mouse indisponível aqui: mova o mouse para mirar.', 'warn'); } });
+    renderer.domElement.addEventListener('click', () => { if (this.state === 'play' && !UI.blocking() && !document.pointerLockElement) this.lock(true); });
     await prog(100, 'Pronto!');
     document.getElementById('loading').classList.add('hidden');
     this.toMenu();
@@ -100,13 +102,22 @@ const Game = {
     try { localStorage.setItem('zonamorta.cfg', JSON.stringify(s)); } catch (e) { /* ignora */ }
   },
 
-  lock() {
+  // Captura do mouse. Se o navegador (ou um iframe) recusar duas vezes após cliques,
+  // passa a usar o movimento livre do mouse como alternativa.
+  lockFails: 0,
+  lock(gesture = false) {
     if (this.noLock || Touch.on) return;
     const el = this.renderer.domElement;
+    if (!el.requestPointerLock) { this.noLock = true; return; }
+    const fail = () => {
+      if (!gesture) return;
+      if (++this.lockFails >= 2 && !this.noLock) { this.noLock = true; UI.note('Captura do mouse indisponível aqui: mova o mouse para mirar.', 'warn'); }
+    };
+    this.pendingGesture = gesture;
     try {
-      const r = el.requestPointerLock && el.requestPointerLock();
-      if (r && r.catch) r.catch(() => { this.noLock = true; });
-    } catch (e) { this.noLock = true; }
+      const r = el.requestPointerLock();
+      if (r && r.then) r.then(() => { this.lockFails = 0; }, fail);
+    } catch (e) { fail(); }
   },
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); },
   onLockChange() {
@@ -138,14 +149,16 @@ const Game = {
     this.saveGame();
   },
   resume() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     UI.hide('pause');
     for (const id of ['config', 'controles', 'arsenal']) UI.hide(id);
     this.state = 'play';
     UI.open = null;
-    this.lock();
+    this.lock(true);
   },
 
   start(mode, cont = false) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     Sfx.init(); Sfx.startAmbient();
     this.mode = mode;
     this.survival = mode === 'sobrevivencia';
@@ -168,7 +181,7 @@ const Game = {
     this.state = 'play';
     UI.open = null;
     UI.dirty = true;
-    this.lock();
+    this.lock(true);
     if (mode === 'sobrevivencia' && !cont) UI.note('Sobreviva: procure comida, água e armas. Zumbis ouvem seus tiros!', 'info');
     if (mode === 'hordas') UI.note('Prepare-se! Ondas de zumbis vão invadir Santa Cruz.', 'warn');
     if (mode === 'arsenal') UI.note('Campo de tiro: pressione K (ou Tab → Arsenal) para escolher qualquer arma.', 'info');
@@ -237,7 +250,7 @@ const Game = {
       Player.reset(s.x, s.z, s.yaw);
       Player.add({ id: 'facao', n: 1 }); Player.add({ id: 'atadura', n: 2 }); Player.add({ id: 'agua', n: 1 });
       this.selectSlot('mel', true);
-      this.state = 'play'; UI.open = null; UI.dirty = true; Touch.show(true); this.lock();
+      this.state = 'play'; UI.open = null; UI.dirty = true; Touch.show(true); this.lock(true);
     } else this.start(this.mode);
   },
 
@@ -437,7 +450,7 @@ const Game = {
         for (let k = 0; k < 6; k++) {
           const a = Math.random() * Math.PI * 2, r = 38 + Math.random() * 28;
           const x = P.body.p.x + Math.cos(a) * r, z = P.body.p.z + Math.sin(a) * r;
-          const y = Phys.support(x, z, 0.3, 100);
+          const y = Phys.ground(x, z);
           if (y < World.WATER + 0.3 || Phys.blocked(x - 0.3, y + 0.2, z - 0.3, x + 0.3, y + 1.8, z + 0.3)) continue;
           const w = H.wave, rr = Math.random();
           const type = rr < Math.min(0.12, 0.02 * w) ? 'brutamonte' : rr < 0.12 + Math.min(0.35, w * 0.04) ? 'corredor' : rr < 0.55 ? 'comum' : rr < 0.7 ? 'rastejante' : w > 3 && rr < 0.85 ? 'militar' : 'comum';

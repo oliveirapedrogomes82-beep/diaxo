@@ -586,7 +586,7 @@ const UI = {
 const Touch = {
   on: false, move: { x: 0, y: 0 }, fire: false, ads: false, sprint: false, jump: false,
   init() {
-    this.on = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window && navigator.maxTouchPoints > 0;
+    this.on = matchMedia('(pointer: coarse)').matches; // dispositivo cujo ponteiro principal é o toque
     if (!this.on) return;
     document.body.classList.add('touch');
     const stick = $('#t-stick'), knob = $('#t-stick i');

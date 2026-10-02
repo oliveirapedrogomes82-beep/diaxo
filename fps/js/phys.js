@@ -73,6 +73,9 @@ const Phys = {
     return best;
   },
 
+  // Chão no nível do terreno (ignora telhados e lajes altas).
+  ground(x, z, r = 0.3) { return this.support(x, z, r, World.height(x, z) + 1.2); },
+
   // Move um corpo b = {p: Vector3 (pés), v: Vector3, r, h, step, onGround}.
   move(b, dx, dy, dz) {
     const r = b.r;

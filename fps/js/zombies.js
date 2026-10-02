@@ -116,7 +116,7 @@ const Zombies = {
     const t = ZTYPES[type];
     const m = Models.zombie(type);
     m.root.scale.setScalar(t.scale);
-    const py = y ?? Phys.support(x, z, 0.3, 500);
+    const py = y ?? Phys.ground(x, z);
     const zb = {
       type, t, m, hp: t.hp, maxHp: t.hp,
       b: { p: new THREE.Vector3(x, py, z), v: new THREE.Vector3(), r: 0.25 * t.scale, h: (t.crawl ? 0.7 : 1.8) * t.scale, step: 0.45, onGround: true },
@@ -428,7 +428,7 @@ const Zombies = {
       const d = Math.hypot(x - pp.x, z - pp.z);
       if (d < 45 || d > 200) continue;
       if (Math.abs(x) > World.HALF - 10 || Math.abs(z) > World.HALF - 10) continue;
-      const y = Phys.support(x, z, 0.3, 200);
+      const y = Phys.ground(x, z);
       if (y < World.WATER + 0.3) continue;
       if (Phys.blocked(x - 0.3, y + 0.2, z - 0.3, x + 0.3, y + 1.8, z + 0.3)) continue;
       this.spawn(type, x, z, y);
@@ -456,7 +456,7 @@ const Animals = {
   spawn(type, x, z) {
     const t = ATYPES[type];
     const m = Models.animal(type);
-    const y = Phys.support(x, z, 0.3, 300);
+    const y = Phys.ground(x, z);
     const a = { type, t, m, hp: t.hp, p: new THREE.Vector3(x, y, z), b: null, yaw: Math.random() * 6.28, state: 'wander', timer: 0, dead: false, deadT: 0, phase: 0, speed: 0 };
     a.b = { p: a.p, v: new THREE.Vector3(), r: 0.35, h: 1.0, step: 0.4, onGround: true };
     m.root.position.copy(a.p);
