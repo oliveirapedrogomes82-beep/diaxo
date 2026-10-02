@@ -16,13 +16,25 @@ const Items = {
     this.list = [];
   },
 
+  geoCache: {},
+  // Arma completa (corpo, carregador e acessórios) mesclada numa única geometria.
+  weaponGeo(st) {
+    const key = st.id + '|' + JSON.stringify(st.att || {});
+    if (this.geoCache[key]) return this.geoCache[key];
+    const g = Models.weaponGroup(st).group;
+    g.updateMatrixWorld(true);
+    const gb = new GB();
+    g.traverse((o) => { if (o.isMesh && o.geometry.attributes.color) gb.addGeo(o.geometry, o.matrixWorld); });
+    return (this.geoCache[key] = gb.build());
+  },
+
   makeObj(st) {
     const d = itemDef(st.id);
     let obj;
     if (d.type === 'weapon' && d.cls !== 'melee' && !d.stack) {
-      obj = Models.weaponGroup(st, { mat: MAT.gun }).group;
-      obj.rotation.set(0, 0, Math.PI / 2);
-      const o = new THREE.Group(); o.add(obj); obj = o;
+      const m = new THREE.Mesh(this.weaponGeo(st), MAT.gun);
+      m.rotation.set(0, 0, Math.PI / 2);
+      obj = new THREE.Group(); obj.add(m);
     } else if (d.type === 'weapon') {
       const mdl = Models.weapon(st.id);
       const m = new THREE.Mesh(mdl.body, MAT.gun);
@@ -81,7 +93,7 @@ const Items = {
       this.respawnT = 0;
       for (const it of this.list) {
         const d = Math.abs(it.x - pp.x) + Math.abs(it.z - pp.z);
-        it.obj.visible = d < 90;
+        it.obj.visible = d < 50;
         it.age += 1;
       }
       // Reposição lenta do saque longe do jogador.

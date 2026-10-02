@@ -11,8 +11,8 @@ const UNIT = {
   cyl8: new THREE.CylinderGeometry(1, 1, 1, 8).toNonIndexed(),
   cyl12: new THREE.CylinderGeometry(1, 1, 1, 12).toNonIndexed(),
   cone8: new THREE.CylinderGeometry(0, 1, 1, 8).toNonIndexed(),
-  sph: new THREE.IcosahedronGeometry(1, 1).toNonIndexed(),
-  sph0: new THREE.IcosahedronGeometry(1, 0).toNonIndexed(),
+  sph: new THREE.IcosahedronGeometry(1, 1),
+  sph0: new THREE.IcosahedronGeometry(1, 0),
 };
 
 // Construtor de geometria: acumula primitivas transformadas com cor.
@@ -114,7 +114,7 @@ const MAT = {
   vc: new THREE.MeshLambertMaterial({ vertexColors: true }),
   vcFlat: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
   vcDouble: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }),
-  gun: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.25 }),
+  gun: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.12 }),
   flash: new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }),
   lens: new THREE.MeshBasicMaterial({ color: 0x223344 }),
   colorCache: {},
@@ -188,7 +188,7 @@ const Models = {
       if (p.comp) for (let i = 0; i < 3; i++) gb.box(sw * 1.03, 0.004, 0.007, 0, y0 + sh, z1 + 0.012 + i * 0.012, 0x111111);
       // miras
       gb.box(0.004, 0.008, 0.006, 0, y0 + sh + 0.004, z1 + 0.012 - (p.bl || 0), sc);
-      gb.box(0.016, 0.007, 0.006, 0, y0 + sh + 0.0035, z0 - 0.012, sc);
+      gb.box(0.005, 0.009, 0.006, -0.0055, y0 + sh + 0.0045, z0 - 0.012, sc); gb.box(0.005, 0.009, 0.006, 0.0055, y0 + sh + 0.0045, z0 - 0.012, sc);
       // serrilhado
       for (let i = 0; i < 4; i++) gb.box(sw * 1.04, sh * 0.7, 0.002, 0, y0 + sh * 0.5, z0 - 0.01 - i * 0.008, 0x111111);
     }
@@ -215,7 +215,7 @@ const Models = {
     return {
       gb, mag, kind: 'pistol', info: this.info({
         muzzle: new THREE.Vector3(0, by, z1 - (p.bl || 0) - 0.01), railY: y0 + sh, railZ: z0 - sl / 2,
-        sightY: y0 + sh + 0.007, rearZ: z0 - 0.012,
+        sightY: y0 + sh + 0.008, rearZ: z0 - 0.012,
         under: new THREE.Vector3(0, y0 - 0.03, z0 - fl + 0.03), side: new THREE.Vector3(0, y0 - 0.03, z0 - fl + 0.03),
         support: new THREE.Vector3(-0.012, -0.045, 0.02), magPos, len: sl + 0.05, back: 0.06,
       }),
@@ -240,7 +240,7 @@ const Models = {
     if (p.rib) gb.box(0.008, 0.008, bl, 0, by + 0.012, -0.055 - bl / 2, fc);
     if (p.ported) for (let i = 0; i < 4; i++) gb.box(0.019, 0.005, 0.006, 0, by + 0.008, -0.055 - bl + 0.01 + i * 0.012, 0x111111);
     if (!p.shroud && !p.saa) gb.cyl(0.005, bl * 0.8, 0, by - 0.017, -0.055 - bl * 0.4, fc, 'z', 6); // vareta do extrator
-    gb.box(0.004, 0.012, 0.008, 0, by + 0.016, -0.055 - bl + 0.008, fc);
+    gb.box(0.004, 0.016, 0.008, 0, by + 0.016, -0.055 - bl + 0.008, fc);
     // cão e gatilho
     gb.box(0.008, 0.022, 0.012, 0, 0.065, 0.035, fc, -0.6, 0, 0);
     gb.box(0.006, 0.004, 0.04, 0, -0.012, -0.01, fc);
@@ -481,60 +481,84 @@ const Models = {
       case 'none': case 'tube': default: break;
     }
 
-    // Miras e trilho superior
+    // Miras metálicas: alça com entalhe atrás e massa de mira na frente, ambas alinhadas em sightY.
     let sightY = ry1 + 0.02, rearZ = zf + 0.05, sightX = 0;
     const fz = (p.ht === 'none' || !p.ht ? zf : hz1) - (p.mz === 'supplong' ? -0.05 : 0.02);
+    const notch = (z, base, x = 0, c = m) => {
+      const h = sightY + 0.005 - base;
+      gb.box(0.007, h, 0.012, x - 0.0065, base + h / 2, z, c);
+      gb.box(0.007, h, 0.012, x + 0.0065, base + h / 2, z, c);
+      const bh = sightY - 0.003 - base;
+      if (bh > 0.001) gb.box(0.006, bh, 0.012, x, base + bh / 2, z, c);
+    };
+    const post = (z, base, x = 0, c = m, ears = false) => {
+      const h = sightY - base;
+      gb.box(0.004, h, 0.006, x, base + h / 2, z, c);
+      if (ears) { for (const e of [-0.009, 0.009]) gb.box(0.004, h + 0.006, 0.01, x + e, base + (h + 0.006) / 2, z, c); }
+    };
+    const frontZ = Math.min(fz, muzzleZ + 0.04);
     switch (p.sg) {
       case 'ak':
-        gb.box(0.022, 0.016, 0.07, 0, ry1 + 0.006, zf + 0.06, m);
-        gb.box(0.006, 0.026, 0.008, 0, by + 0.028, Math.min(fz, muzzleZ + 0.03), m);
-        gb.box(0.016, 0.004, 0.012, 0, by + 0.012, Math.min(fz, muzzleZ + 0.03), m);
         sightY = by + 0.04; rearZ = zf + 0.04;
+        gb.box(0.022, 0.012, 0.07, 0, ry1 + 0.006, zf + 0.06, m);
+        notch(zf + 0.035, ry1 + 0.012);
+        gb.box(0.016, 0.006, 0.014, 0, by + 0.012, Math.min(fz, muzzleZ + 0.03), m);
+        post(Math.min(fz, muzzleZ + 0.03), by + 0.012, 0, m, true);
         break;
       case 'carry': case 'g36': case 'aa12': {
         const h = 0.055;
+        sightY = ry1 + h + 0.016; rearZ = zr - rl * 0.15;
         gb.box(0.016, 0.012, rl * 0.65, 0, ry1 + h, zr - rl * 0.45, m);
         gb.box(0.014, h, 0.02, 0, ry1 + h / 2, zr - rl * 0.15, m);
         gb.box(0.014, h, 0.02, 0, ry1 + h / 2, zr - rl * 0.78, m);
-        if (p.sg === 'carry') gb.box(0.008, 0.06, 0.012, 0, by + 0.03, Math.min(fz, muzzleZ + 0.06), m);
-        sightY = ry1 + h + 0.012; rearZ = zr - rl * 0.15;
+        notch(zr - rl * 0.15, ry1 + h + 0.006);
+        if (p.sg === 'carry') {
+          const fzz = Math.min(fz, muzzleZ + 0.06);
+          gb.box(0.012, (sightY - by) * 0.55, 0.018, 0, by + (sightY - by) * 0.275, fzz, m);
+          post(fzz, by + 0.01, 0, m, true);
+        } else post(zr - rl * 0.78, ry1 + h + 0.006, 0, m, true);
         break;
       }
       case 'flat':
+        sightY = ry1 + 0.03; rearZ = zr - 0.04;
         gb.box(rw * 0.55, 0.008, rl * 0.92, 0, ry1 + 0.004, (zr + zf) / 2, a);
-        gb.box(0.012, 0.026, 0.01, 0, ry1 + 0.017, zr - 0.04, a);
-        gb.box(0.01, 0.03, 0.01, 0, by + 0.03, Math.min(fz, hz1 + 0.02), a);
-        sightY = ry1 + 0.028; rearZ = zr - 0.04;
+        notch(zr - 0.04, ry1 + 0.008, 0, a);
+        gb.box(0.014, 0.012, 0.014, 0, by + br + 0.006, Math.min(fz, hz1 + 0.02), a);
+        post(Math.min(fz, hz1 + 0.02), by + br + 0.006, 0, a, true);
         break;
-      case 'hood':
-        gb.box(0.02, 0.022, 0.025, 0, ry1 + 0.01, zr - 0.03, m);
-        gb.cyl(0.013, 0.02, 0, by + 0.034, Math.min(fz, muzzleZ + 0.04), m, 'z', 8);
-        gb.box(0.004, 0.03, 0.006, 0, by + 0.02, Math.min(fz, muzzleZ + 0.04), m);
-        sightY = by + 0.036; rearZ = zr - 0.03;
-        if (p.ctube) sightY = ry1 + 0.024;
+      case 'hood': {
+        const base = p.ctube ? ry1 + 0.009 : ry1;
+        sightY = p.ctube ? ry1 + 0.032 : ry1 + 0.024; rearZ = zr - 0.03;
+        gb.box(0.022, 0.012, 0.025, 0, base + 0.006, zr - 0.03, m);
+        notch(zr - 0.03, base + 0.012);
+        const pb = p.ctube ? base : by + br;
+        post(frontZ, pb, 0, m, true);
+        gb.box(0.026, 0.004, 0.012, 0, sightY + 0.013, frontZ, m);
         break;
+      }
       case 'peep':
-        gb.box(0.018, 0.03, 0.02, 0, ry1 + 0.012, zr - 0.02, m);
-        gb.box(0.006, 0.028, 0.006, 0, by + 0.025, muzzleZ + 0.015, m);
-        sightY = by + 0.04; rearZ = zr - 0.02;
+        sightY = ry1 + 0.024; rearZ = zr - 0.02;
+        gb.box(0.02, 0.01, 0.02, 0, ry1 + 0.005, zr - 0.02, m);
+        notch(zr - 0.02, ry1 + 0.01);
+        post(muzzleZ + 0.015, by + br, 0, m, true);
         break;
       case 'post':
-        gb.box(0.006, 0.02, 0.006, 0, ry1 + 0.006, zf + 0.02, m);
-        gb.box(0.014, 0.012, 0.008, 0, ry1 + 0.004, zr - 0.02, m);
-        sightY = ry1 + 0.014; rearZ = zr - 0.02;
+        sightY = ry1 + 0.016; rearZ = zr - 0.02;
+        notch(zr - 0.02, ry1);
+        post(zf + 0.02, ry1);
         break;
       case 'bead':
+        sightY = ry1 + 0.006; rearZ = zr - 0.03;
         gb.box(0.008, 0.005, (hl + bl) * 0.9, 0, by + br + 0.003, (bz0 + hl - bl) / 2, m);
-        gb.sph(0.003, 0, by + br + 0.007, muzzleZ + 0.01, C.BRASS);
-        sightY = by + br + 0.008; rearZ = zr - 0.03;
+        post(muzzleZ + 0.012, by + br, 0, m);
+        gb.sph(0.0035, 0, sightY, muzzleZ + 0.012, C.BRASS);
         break;
       case 'offset':
-        sightX = -0.055;
-        gb.box(0.04, 0.008, 0.02, -0.03, ry1 + 0.01, zr - 0.04, m);
-        gb.box(0.008, 0.04, 0.01, sightX, ry1 + 0.03, zr - 0.04, m);
-        gb.box(0.035, 0.008, 0.012, -0.025, by + 0.01, muzzleZ + 0.1, m);
-        gb.box(0.006, 0.04, 0.006, sightX, by + 0.03, muzzleZ + 0.1, m);
-        sightY = ry1 + 0.05; rearZ = zr - 0.04;
+        sightX = -0.055; sightY = ry1 + 0.05; rearZ = zr - 0.04;
+        gb.box(0.05, 0.008, 0.02, -0.03, ry1 + 0.01, zr - 0.04, m);
+        notch(zr - 0.04, ry1 + 0.014, sightX);
+        gb.box(0.05, 0.008, 0.012, -0.028, by + 0.01, muzzleZ + 0.1, m);
+        post(muzzleZ + 0.1, by + 0.014, sightX, m, true);
         break;
       case 'none': default:
         gb.box(rw * 0.5, 0.008, rl * 0.6, 0, ry1 + 0.004, (zr + zf) / 2, a);
@@ -598,7 +622,7 @@ const Models = {
       body(0.09, by - 0.02, zb, zf, f, 0.055);
       gb.box(0.03, 0.02, 0.5, 0, by + 0.09, 0.03, f); // alça longa
       gb.box(0.03, 0.08, 0.025, 0, by + 0.045, -0.2, f); gb.box(0.03, 0.06, 0.025, 0, by + 0.05, 0.25, f);
-      gb.box(0.015, 0.02, 0.02, 0, by + 0.11, 0.24, f);
+      gb.box(0.006, 0.022, 0.02, -0.0065, by + 0.111, 0.24, f); gb.box(0.006, 0.022, 0.02, 0.0065, by + 0.111, 0.24, f); gb.box(0.004, 0.016, 0.006, 0, by + 0.107, -0.18, f);
       gb.cyl(0.006, 0.22, 0.02, by - 0.01, -0.3, m, 'z', 6); gb.cyl(0.006, 0.22, -0.02, by - 0.01, -0.3, m, 'z', 6); // bipé dobrado
       sightY = by + 0.115; rearZ = 0.24; railY = by + 0.1; railZ = 0.0; bl = 0.18;
     } else if (p.l85) {
@@ -612,13 +636,14 @@ const Models = {
     } else if (p.qbz) {
       body(0.1, by - 0.02, zb, zf, f, 0.06);
       gb.box(0.025, 0.02, 0.24, 0, by + 0.075, 0.0, f); gb.box(0.025, 0.06, 0.03, 0, by + 0.04, 0.1, f); gb.box(0.025, 0.06, 0.03, 0, by + 0.04, -0.1, f);
-      gb.box(0.006, 0.02, 0.008, 0, by + 0.095, -0.1, f);
-      sightY = by + 0.1; rearZ = 0.1; railY = by + 0.088; bl = 0.17;
+      gb.box(0.004, 0.02, 0.008, 0, by + 0.095, -0.1, f);
+      gb.box(0.006, 0.026, 0.012, -0.0065, by + 0.095, 0.1, f); gb.box(0.006, 0.026, 0.012, 0.0065, by + 0.095, 0.1, f);
+      sightY = by + 0.105; rearZ = 0.1; railY = by + 0.088; bl = 0.17;
     } else if (p.tavor) {
       body(0.1, by - 0.02, zb, zf, f, 0.06);
       gb.box(0.05, 0.07, 0.14, 0, by - 0.11, -0.04, f); // guarda-mato fechado
       gb.box(0.03, 0.008, 0.35, 0, by + 0.035, 0.0, a);
-      gb.box(0.012, 0.025, 0.01, 0, by + 0.05, 0.15, a); gb.box(0.01, 0.025, 0.01, 0, by + 0.05, -0.18, a);
+      gb.box(0.006, 0.03, 0.01, -0.0065, by + 0.052, 0.15, a); gb.box(0.006, 0.03, 0.01, 0.0065, by + 0.052, 0.15, a); gb.box(0.004, 0.025, 0.01, 0, by + 0.05, -0.18, a);
       sightY = by + 0.062; rearZ = 0.15; railY = by + 0.04; bl = 0.14;
     } else if (p.ksg) {
       body(0.075, by + 0.005, zb, zf, f, 0.055);
@@ -947,7 +972,7 @@ const Models = {
       const hm = new THREE.Mesh(P.helmet, MAT.color(0x4d5338)); hm.position.y = 0.32; head.add(hm);
       const vs = new THREE.Mesh(P.vest, MAT.color(0x6b6a4a)); vs.position.y = 0.32; torso.add(vs);
     }
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
+    torso.castShadow = true; legL.castShadow = true; legR.castShadow = true; head.castShadow = true;
     return { root, hips, torso, head, armL, armR, legL, legR };
   },
 

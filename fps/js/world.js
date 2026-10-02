@@ -179,6 +179,11 @@ const World = {
           S[i].h = sum / c;
         }
       }
+      if (r.kind === 'estande') {
+        // Estande plano (rampa linear) para manter a linha de visada livre até 300 m.
+        const h0 = S[0].h, h1 = S[S.length - 1].h;
+        S.forEach((s, i) => { s.h = U.lerp(h0, h1, i / (S.length - 1)); });
+      }
       for (const s of S) s.h = Math.max(s.h, 1.4);
       r.S = S;
     }
@@ -392,10 +397,17 @@ const World = {
     }
     const mat = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
     const tint = new THREE.Color();
-    this.treeMeshes = {};
-    for (const type in list) {
-      const L = list[type];
-      if (!L.length) continue;
+    // Divide a vegetação em blocos de 125 m para que cada bloco seja recortado pela câmera e pela distância.
+    const CH = 125, NC = Math.ceil(this.SIZE / CH);
+    this.treeChunks = [];
+    const buckets = {};
+    for (const type in list) for (const t of list[type]) {
+      const ci = U.clamp(Math.floor((t[0] + this.HALF) / CH), 0, NC - 1), cj = U.clamp(Math.floor((t[2] + this.HALF) / CH), 0, NC - 1);
+      const key = type + ':' + ci + ':' + cj;
+      (buckets[key] || (buckets[key] = { type, ci, cj, items: [] })).items.push(t);
+    }
+    for (const key in buckets) {
+      const B = buckets[key], type = B.type, L = B.items;
       const im = new THREE.InstancedMesh(geos[type], MAT.vcFlat, L.length);
       im.castShadow = type !== 'bush';
       im.receiveShadow = true;
@@ -408,7 +420,7 @@ const World = {
         im.setMatrixAt(i, mat);
         tint.setHSL(0, 0, 0.85 + r() * 0.3);
         im.setColorAt(i, tint);
-        const tree = { type, i, x: t[0], y: t[1], z: t[2], sc, hp: type === 'rock' ? 400 : 120, mat: mat.clone() };
+        const tree = { type, i, im, x: t[0], y: t[1], z: t[2], sc, hp: type === 'rock' ? 400 : 120 };
         if (type !== 'bush') {
           const rad = type === 'rock' ? sc * 0.85 : 0.28 * sc;
           tree.col = Phys.add({ x0: t[0] - rad, x1: t[0] + rad, z0: t[2] - rad, z1: t[2] + rad, y0: t[1] - 1, y1: t[1] + (type === 'rock' ? sc * 0.8 : 7 * sc), mat: type === 'rock' ? 'rock' : 'wood', tree });
@@ -416,8 +428,18 @@ const World = {
         this.trees.push(tree);
       });
       im.instanceMatrix.needsUpdate = true;
-      this.treeMeshes[type] = im;
+      im.computeBoundingSphere();
+      this.treeChunks.push({ im, x: -this.HALF + (B.ci + 0.5) * CH, z: -this.HALF + (B.cj + 0.5) * CH, small: type === 'bush' });
       this.scene.add(im);
+    }
+  },
+
+  // Esconde blocos de vegetação distantes (além da neblina).
+  cullTrees(cam, far) {
+    if (!this.treeChunks) return;
+    for (const c of this.treeChunks) {
+      const d = Math.hypot(c.x - cam.x, c.z - cam.z) - 90;
+      c.im.visible = d < (c.small ? Math.min(far, 160) : far);
     }
   },
 
@@ -427,9 +449,8 @@ const World = {
     tree.hp -= dmg;
     if (tree.hp > 0) return false;
     tree.dead = true;
-    const im = this.treeMeshes[tree.type];
     const m = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
-    im.setMatrixAt(tree.i, m); im.instanceMatrix.needsUpdate = true;
+    tree.im.setMatrixAt(tree.i, m); tree.im.instanceMatrix.needsUpdate = true;
     if (tree.col) Phys.remove(tree.col);
     return true;
   },
@@ -461,22 +482,21 @@ const World = {
     this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
     this.stars.frustumCulled = false;
     s.add(this.stars);
-    // Nuvens.
-    this.clouds = new THREE.Group();
-    const cm = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92 });
+    // Nuvens: uma camada mesclada, duplicada para dar a volta sem emendas.
+    const cm = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true, flatShading: true, transparent: true, opacity: 0.92 });
     this.cloudMat = cm;
+    const cgb = new GB();
     for (let i = 0; i < 46; i++) {
-      const g = new THREE.Group();
+      const cx = (rr() - 0.5) * 1600, cy = 170 + rr() * 70, cz = (rr() - 0.5) * 1600;
       const n = 3 + Math.floor(rr() * 4);
-      for (let k = 0; k < n; k++) {
-        const m = new THREE.Mesh(UNIT.sph0, cm);
-        m.scale.set(18 + rr() * 22, 7 + rr() * 6, 14 + rr() * 16);
-        m.position.set(k * 20 - n * 10, rr() * 5, (rr() - 0.5) * 14);
-        g.add(m);
-      }
-      g.position.set((rr() - 0.5) * 1600, 170 + rr() * 70, (rr() - 0.5) * 1600);
-      this.clouds.add(g);
+      for (let k = 0; k < n; k++) cgb.add(UNIT.sph0, cgb._mat(cx + k * 20 - n * 10, cy + rr() * 5, cz + (rr() - 0.5) * 14, 18 + rr() * 22, 7 + rr() * 6, 14 + rr() * 16), 0xffffff);
     }
+    const cg = cgb.build();
+    this.clouds = new THREE.Group();
+    this.cloudA = new THREE.Mesh(cg, cm); this.cloudB = new THREE.Mesh(cg, cm);
+    this.cloudA.frustumCulled = this.cloudB.frustumCulled = false;
+    this.clouds.add(this.cloudA, this.cloudB);
+    this.cloudOff = 0;
     s.add(this.clouds);
     // Luzes.
     this.hemi = new THREE.HemisphereLight(0xbcd8ff, 0x4a5a3a, 0.9);
@@ -535,9 +555,8 @@ const World = {
   },
 
   updateClouds(dt, wind) {
-    for (const g of this.clouds.children) {
-      g.position.x += dt * (2 + wind * 6);
-      if (g.position.x > 800) g.position.x -= 1600;
-    }
+    this.cloudOff = (this.cloudOff + dt * (2 + wind * 6)) % 1600;
+    this.cloudA.position.x = this.cloudOff;
+    this.cloudB.position.x = this.cloudOff - 1600;
   },
 };

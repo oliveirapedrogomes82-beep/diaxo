@@ -83,11 +83,12 @@ class Kit {
     const pivot = new THREE.Group();
     const hp = this.tp(hx, hz);
     pivot.position.set(hp[0], this.y + y0, hp[1]);
-    const g = new THREE.BoxGeometry(w - 0.04, h - 0.03, 0.06); g.translate(w / 2, h / 2, 0);
-    const mesh = new THREE.Mesh(g, MAT.color(color));
-    mesh.castShadow = true;
-    const knob = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.14), MAT.color(0xc9a43a));
-    knob.position.set(w - 0.12, 1.0, 0); mesh.add(knob);
+    const dg = new GB();
+    dg.box(w - 0.04, h - 0.03, 0.06, w / 2, h / 2, 0, color);
+    dg.box(0.06, 0.06, 0.14, w - 0.12, 1.0, 0, 0xc9a43a);
+    if (!Kit.doorGeo) Kit.doorGeo = {};
+    const gk = w + ':' + color;
+    const mesh = new THREE.Mesh(Kit.doorGeo[gk] || (Kit.doorGeo[gk] = dg.build()), MAT.vcFlat);
     pivot.add(mesh);
     const cy = this.th + Math.atan2(-d[1], d[0]), oy = this.th + Math.atan2(-o[1], o[0]);
     pivot.rotation.y = cy;
@@ -644,7 +645,9 @@ const Buildings = {
     // heliponto
     k.vis(-14, 0.02, 20, 2, 0.06, 36, 0x55565a);
     k.vis(-9, 0.07, 24, -7.6, 0.08, 32, 0xffffff); k.vis(-4.4, 0.07, 24, -3, 0.08, 32, 0xffffff); k.vis(-7.6, 0.07, 27.4, -4.4, 0.08, 28.6, 0xffffff);
-    k.sign('BASE MILITAR SENTINELA', 0, 3.3, S + 0.4, 0, 6, 0.7, '#3d4430', '#e8e2c8');
+    for (const x of [-6.6, 6.6]) k.box(x - 0.35, -0.5, S - 0.35, x + 0.35, 4.4, S + 0.35, 0x8a8470);
+    k.vis(-7, 3.7, S - 0.3, 7, 4.4, S + 0.3, 0x6b6e5a);
+    k.sign('BASE MILITAR SENTINELA', 0, 4.05, S + 0.32, 0, 6, 0.6, '#3d4430', '#e8e2c8');
     k.finish();
     this.hangar(this.kit(L, L.x - 28, L.z - 30, 2, 13, 10, h));
     for (const dz of [-42, -26, -10]) this.quartel(this.kit(L, L.x + 26, L.z + dz, 0, 8, 4, h));

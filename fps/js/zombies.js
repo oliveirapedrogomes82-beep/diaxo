@@ -15,70 +15,89 @@ const ZHIT = {
   crawl: [['head', 0, 0.4, -0.8, 0.17, 0.17, 0.17], ['body', 0, 0.3, -0.3, 0.27, 0.16, 0.34], ['limb', 0, 0.2, 0.45, 0.22, 0.13, 0.46]],
 };
 
-// Navegação: A* numa grade de 1 m com ocupação calculada sob demanda.
+// Navegação: A* numa grade de 0,5 m com ocupação calculada sob demanda.
 const Nav = {
   cache: new Map(),
+  C: 0.5,
   cellBlocked(ix, iz, yRef) {
-    const band = Math.round(yRef / 2.5);
-    const key = ix * 73856093 ^ iz * 19349663 ^ band * 83492791;
+    const band = Math.round(yRef * 2);
+    const key = (ix * 73856093) ^ (iz * 19349663) ^ (band * 83492791);
     const c = this.cache.get(key);
     if (c !== undefined) return c;
-    const cx = ix + 0.5, cz = iz + 0.5;
-    const s = Phys.support(cx, cz, 0.25, yRef + 0.6);
-    let b = s < World.WATER - 1.1 || s < yRef - 2.6;
+    const yb = band / 2;
+    const cx = (ix + 0.5) * this.C, cz = (iz + 0.5) * this.C;
+    const s = Phys.support(cx, cz, 0.2, yb + 0.5);
+    let b = s < World.WATER - 1.1 || s < yb - 2.6;
     if (!b) {
-      const list = Phys.query(cx - 0.3, cz - 0.3, cx + 0.3, cz + 0.3, Phys._tmp2);
+      const list = Phys.query(cx - 0.24, cz - 0.24, cx + 0.24, cz + 0.24, Phys._tmp2);
       for (const col of list) {
         if (col.ghost || col.door || col.vehicle) continue;
         if (col.y1 > s + 0.45 && col.y0 < s + 1.6) { b = true; break; }
       }
     }
-    if (this.cache.size > 250000) this.cache.clear();
+    if (this.cache.size > 400000) this.cache.clear();
     this.cache.set(key, b);
     return b;
   },
-  find(from, to, maxIter = 1400) {
-    const sx = Math.floor(from.x), sz = Math.floor(from.z), tx = Math.floor(to.x), tz = Math.floor(to.z);
-    if (Math.abs(tx - sx) > 45 || Math.abs(tz - sz) > 45) return null;
+  find(from, to, maxIter = 2500) {
+    const C = this.C;
+    const R = 100;
+    const sx = Math.floor(from.x / C), sz = Math.floor(from.z / C);
+    let tx = Math.floor(to.x / C), tz = Math.floor(to.z / C);
+    // alvo distante: mira um ponto intermediário na borda da janela de busca
+    const far = Math.max(Math.abs(tx - sx), Math.abs(tz - sz));
+    if (far > R - 6) { const k = (R - 6) / far; tx = sx + Math.round((tx - sx) * k); tz = sz + Math.round((tz - sz) * k); }
     const yRef = from.y;
-    const K = (x, z) => (x - sx + 64) * 256 + (z - sz + 64);
-    const open = [{ x: sx, z: sz, g: 0, f: 0 }];
-    const came = new Map(), gs = new Map();
-    gs.set(K(sx, sz), 0);
-    let it = 0, found = null;
+    const W = R * 2 + 1;
+    const K = (x, z) => (x - sx + R) * W + (z - sz + R);
+    const g = new Map(), came = new Map(), closed = new Set();
+    // heap binário de [f, x, z]
+    const heap = [];
+    const push = (n) => { heap.push(n); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = i * 2 + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
     const H = (x, z) => { const dx = Math.abs(x - tx), dz = Math.abs(z - tz); return Math.max(dx, dz) + 0.41 * Math.min(dx, dz); };
-    while (open.length && it++ < maxIter) {
-      let bi = 0;
-      for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
-      const cur = open.splice(bi, 1)[0];
-      if (cur.x === tx && cur.z === tz) { found = cur; break; }
+    g.set(K(sx, sz), 0);
+    push([H(sx, sz), sx, sz]);
+    let it = 0, found = false, best = null, bestH = Infinity;
+    while (heap.length && it++ < maxIter) {
+      const [, x, z] = pop();
+      const k = K(x, z);
+      if (closed.has(k)) continue;
+      closed.add(k);
+      const h = H(x, z);
+      if (h < bestH) { bestH = h; best = [x, z]; }
+      if (x === tx && z === tz) { found = true; best = [x, z]; break; }
+      const gc = g.get(k);
       for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
         if (!dx && !dz) continue;
-        const nx = cur.x + dx, nz = cur.z + dz;
-        if (Math.abs(nx - sx) > 60 || Math.abs(nz - sz) > 60) continue;
+        const nx = x + dx, nz = z + dz;
+        if (Math.abs(nx - sx) >= R || Math.abs(nz - sz) >= R) continue;
         if (this.cellBlocked(nx, nz, yRef)) continue;
-        if (dx && dz && (this.cellBlocked(cur.x + dx, cur.z, yRef) || this.cellBlocked(cur.x, cur.z + dz, yRef))) continue;
-        const g = cur.g + (dx && dz ? 1.41 : 1);
-        const k = K(nx, nz);
-        if (gs.has(k) && gs.get(k) <= g) continue;
-        gs.set(k, g); came.set(k, cur);
-        open.push({ x: nx, z: nz, g, f: g + H(nx, nz) });
+        if (dx && dz && (this.cellBlocked(x + dx, z, yRef) || this.cellBlocked(x, z + dz, yRef))) continue;
+        const nk = K(nx, nz);
+        const ng = gc + (dx && dz ? 1.41 : 1);
+        if (g.has(nk) && g.get(nk) <= ng) continue;
+        g.set(nk, ng); came.set(nk, k);
+        push([ng + H(nx, nz) * 1.1, nx, nz]);
       }
     }
-    if (!found) return null;
+    if (!best || (!found && bestH > H(sx, sz) - 4)) return null;
+    // reconstrói (até o melhor nó alcançado, se o alvo não foi encontrado)
     const path = [];
-    let c = found;
-    while (c) { path.push({ x: c.x + 0.5, z: c.z + 0.5 }); c = came.get(K(c.x, c.z)); }
-    path.reverse();
-    // remove pontos colineares
-    const out = [];
-    for (let i = 0; i < path.length; i++) {
-      if (i > 0 && i < path.length - 1) {
-        const a = path[i - 1], b = path[i], d = path[i + 1];
-        if (Math.sign(b.x - a.x) === Math.sign(d.x - b.x) && Math.sign(b.z - a.z) === Math.sign(d.z - b.z)) continue;
-      }
-      out.push(path[i]);
+    let k = K(best[0], best[1]);
+    while (k !== undefined) {
+      const x = Math.floor(k / W) - R + sx, z = (k % W) - R + sz;
+      path.push({ x: (x + 0.5) * C, z: (z + 0.5) * C });
+      k = came.get(k);
     }
+    path.reverse();
+    // simplifica: mantém só os pontos onde a direção muda
+    const out = [path[0]];
+    for (let i = 1; i < path.length - 1; i++) {
+      const a = path[i - 1], b = path[i], d = path[i + 1];
+      if (Math.sign(b.x - a.x) !== Math.sign(d.x - b.x) || Math.sign(b.z - a.z) !== Math.sign(d.z - b.z)) out.push(b);
+    }
+    if (path.length > 1) out.push(path[path.length - 1]);
     return out;
   },
 };
@@ -100,7 +119,7 @@ const Zombies = {
     const py = y ?? Phys.support(x, z, 0.3, 500);
     const zb = {
       type, t, m, hp: t.hp, maxHp: t.hp,
-      b: { p: new THREE.Vector3(x, py, z), v: new THREE.Vector3(), r: 0.3 * t.scale, h: (t.crawl ? 0.7 : 1.8) * t.scale, step: 0.45, onGround: true },
+      b: { p: new THREE.Vector3(x, py, z), v: new THREE.Vector3(), r: 0.25 * t.scale, h: (t.crawl ? 0.7 : 1.8) * t.scale, step: 0.45, onGround: true },
       yaw: Math.random() * Math.PI * 2, state: 'idle', home: { x, z }, wp: null, wpT: 0,
       think: Math.random() * 0.3, phase: Math.random() * 10, atkT: 0, swing: 0, path: null, pathT: 0, pathI: 0,
       lastSeen: null, lostT: 0, groanT: 2 + Math.random() * 8, dead: false, deadT: 0, stagger: 0, bash: 0, stuckT: 0, lastP: new THREE.Vector3(x, py, z),
@@ -223,6 +242,7 @@ const Zombies = {
     z.think = 0.25 + Math.random() * 0.15;
     const P = Player;
     if (P.dead) { if (z.state === 'chase') z.state = 'idle'; return; }
+    if (z.hunter && z.state !== 'chase') { z.state = 'investigate'; z.ip = { x: tgt.x, y: tgt.y, z: tgt.z }; }
     const dx = tgt.x - z.b.p.x, dz = tgt.z - z.b.p.z, dist = Math.hypot(dx, dz);
     let sight = U.lerp(34, 13, night);
     if (P.flashOn) sight += 22 * night;
@@ -297,23 +317,24 @@ const Zombies = {
         z.pathT -= dt;
         if (z.pathT <= 0) {
           z.pathT = 1.0 + Math.random() * 0.5;
-          const from = new THREE.Vector3(b.p.x, b.p.y + 1.0, b.p.z), to = new THREE.Vector3(goal.x, (goal.y ?? b.p.y) + 1.0, goal.z);
+          const from = new THREE.Vector3(b.p.x, b.p.y + 0.5, b.p.z), to = new THREE.Vector3(goal.x, (goal.y ?? b.p.y) + 0.5, goal.z);
           const d = from.distanceTo(to);
-          if (d > 2 && d < 50 && !Phys.los(from, to) && this.pathBudget > 0) {
+          if (d > 2 && d < 160 && (z.forcePath || !Phys.los(from, to)) && this.pathBudget > 0) {
+            z.forcePath = false;
             this.pathBudget--;
             z.path = Nav.find(b.p, goal); z.pathI = 1;
           } else if (Phys.los(from, to)) z.path = null;
         }
         if (z.path && z.pathI < z.path.length) {
           aim = z.path[z.pathI];
-          if (Math.hypot(aim.x - b.p.x, aim.z - b.p.z) < 0.7) z.pathI++;
+          if (Math.hypot(aim.x - b.p.x, aim.z - b.p.z) < 0.45) z.pathI++;
         }
       }
       const dx = aim.x - b.p.x, dz = aim.z - b.p.z, d = Math.hypot(dx, dz);
       if (d > 0.05) {
         mx = dx / d; mz = dz / d;
         // contorna quando preso
-        if (z.sideT > 0) { z.sideT -= dt; const sx = -mz * z.side, sz = mx * z.side; mx = mx * 0.3 + sx; mz = mz * 0.3 + sz; const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
+        if (z.sideT > 0 && !(z.path && z.pathI < z.path.length)) { z.sideT -= dt; const sx = -mz * z.side, sz = mx * z.side; mx = mx * 0.3 + sx; mz = mz * 0.3 + sz; const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
         const want = Math.atan2(-mx, -mz);
         z.yaw += U.angDiff(z.yaw, want) * Math.min(1, dt * 8);
       }
@@ -331,12 +352,12 @@ const Zombies = {
     if (b.onGround) Phys.snapDown(b, 0.3);
     z.speedNow = Math.hypot(b.v.x, b.v.z);
     // portas: força até abrir
-    if (b.hitWall && b.hitWall.door && !b.hitWall.door.open && speed > 0) {
+    if (b.hitDoor && !b.hitDoor.open && speed > 0) {
       z.bash += dt;
-      if (z.bash > 1.6) { z.bash = 0; Game.toggleDoor(b.hitWall.door, true); Sfx.melee(b.p); }
+      if (z.bash > 1.6) { z.bash = 0; Game.toggleDoor(b.hitDoor, true); Sfx.melee(b.p); }
     } else if (b.hitWall && speed > 0) {
       z.stuckT += dt;
-      if (z.stuckT > 0.8) { z.stuckT = 0; z.sideT = 0.9; z.side = Math.random() < 0.5 ? 1 : -1; z.pathT = 0; }
+      if (z.stuckT > 0.8) { z.stuckT = 0; z.sideT = 0.6; z.side = Math.random() < 0.5 ? 1 : -1; z.pathT = 0; z.forcePath = true; }
     } else z.stuckT = Math.max(0, z.stuckT - dt);
     z.m.root.position.copy(b.p);
     z.m.root.rotation.y = z.yaw;

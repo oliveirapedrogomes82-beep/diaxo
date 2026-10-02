@@ -13,7 +13,7 @@ const WeaponCtl = {
 
   init(worldScene) {
     this.scene = new THREE.Scene();
-    this.cam = new THREE.PerspectiveCamera(56, 1, 0.01, 20);
+    this.cam = new THREE.PerspectiveCamera(42, 1, 0.01, 20);
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x45403a, 1.0);
     this.dirL = new THREE.DirectionalLight(0xffffff, 1.4); this.dirL.position.set(0.4, 1, 0.5);
     this.scene.add(this.hemi, this.dirL);
@@ -245,7 +245,7 @@ const WeaponCtl = {
   cycle() {
     const d = this.def;
     if (!d.action) return;
-    if (d.action === 'pump' && this.mode() === 'semi') return;
+    if (d.action === 'pump' && d.modes.includes('pump') && this.mode() === 'semi') return;
     this.needCycle = true;
     this.cycleTotal = this.cycleT = d.cycle || 0.8;
     if (d.action === 'pump') Sfx.pump(0.05); else Sfx.bolt(0.05);
@@ -312,7 +312,7 @@ const WeaponCtl = {
     if (d.reloadType === 'enbloc' && it.ammo === 0 && Sfx.ctx) Sfx.tone(Sfx.master, { t: 0.08, dur: 0.4, vol: 0.12, f: 2600, f2: 2400 });
     Game.stats.shots++;
     if (it.ammo > 0) {
-      if (d.action === 'bolt' || d.action === 'lever' || (d.action === 'pump' && this.mode() !== 'semi')) this.cycle();
+      if (d.action) this.cycle();
     }
     if (it.ammo === 0 && (d.cls === 'arco' || d.cls === 'lancador') && Player.ammo(d.cal) > 0) setTimeout(() => { if (this.cur === it) this.startReload(); }, 250);
     UI.dirty = true;
@@ -429,11 +429,11 @@ const WeaponCtl = {
   // ---------------------------------------------------------------- Animação do modelo
   hipPos() {
     const k = this.gun ? this.gun.info && Models.weapon(this.cur.id).kind : null;
-    if (k === 'pistol' || k === 'revolver') return [0.12, -0.125, -0.34];
-    if (k === 'bullpup' || k === 'p90') return [0.13, -0.15, -0.4];
-    if (k === 'rpg') return [0.15, -0.1, -0.2];
-    if (k === 'bow') return [-0.02, -0.08, -0.42];
-    return [0.135, -0.155, -0.29];
+    if (k === 'pistol' || k === 'revolver') return [0.15, -0.115, -0.46];
+    if (k === 'bullpup' || k === 'p90') return [0.17, -0.15, -0.56];
+    if (k === 'rpg') return [0.2, -0.1, -0.3];
+    if (k === 'bow') return [-0.03, -0.06, -0.58];
+    return [0.18, -0.14, -0.5];
   },
 
   animate(dt, blocked) {
@@ -452,7 +452,7 @@ const WeaponCtl = {
     const sx = this.swayX * (1 - this.adsT * 0.7), sy = this.swayY * (1 - this.adsT * 0.7);
     // oscilação da mira com lunetas (segure Shift para prender a respiração)
     const scoped = this.isGun() && this.mods.scope && this.adsT > 0.5;
-    let amp = scoped ? 0.0035 * (this.mods.zoom / 8 + 0.5) : this.adsT * 0.0008;
+    let amp = scoped ? 0.0012 * (this.mods.zoom / 8 + 0.5) : this.adsT * 0.0005;
     if (P.stance === 'prone') amp *= 0.4; else if (P.stance === 'crouch') amp *= 0.75;
     if (scoped && (Input.k.ShiftLeft || Input.k.ShiftRight) && P.stamina > 5) { amp *= 0.15; P.stamina -= dt * 12; P.stamT = 0.6; }
     this.aimSway.x = Math.sin(this.breath * 0.9) * amp + Math.sin(this.breath * 2.3) * amp * 0.3;
@@ -464,26 +464,26 @@ const WeaponCtl = {
       this.pivot.visible = false;
       const k = this.swing > 0 ? Math.sin((1 - this.swing / 0.5) * Math.PI) : 0;
       const bobY = Math.abs(Math.cos(this.bob)) * 0.012 * bobAmp;
-      this.handR.position.set(0.15 - k * 0.1, -0.2 + bobY + k * 0.05, -0.32 - k * 0.22);
-      this.handL.position.set(-0.15, -0.21 + bobY, -0.33);
+      this.handR.position.set(0.2 - k * 0.14, -0.21 + bobY + k * 0.07, -0.5 - k * 0.3);
+      this.handL.position.set(-0.2, -0.22 + bobY, -0.52);
       this.handR.rotation.set(0, 0, 0); this.handL.rotation.set(0, 0, 0);
-      this.placeArm(this.armR, new THREE.Vector3(0.25, -0.42, 0.12), this.handR.position);
-      this.placeArm(this.armL, new THREE.Vector3(-0.25, -0.42, 0.12), this.handL.position);
+      this.placeArm(this.armR, new THREE.Vector3(0.3, -0.55, 0.0), this.handR.position);
+      this.placeArm(this.armL, new THREE.Vector3(-0.3, -0.55, 0.0), this.handL.position);
       this.armL.visible = this.handL.visible = true;
       this.updateShells(dt);
       return;
     }
     this.pivot.visible = true;
     if (d.cls === 'melee') {
-      pos.set(0.2, -0.28, -0.42); rot.set(-0.55, 0, 0.3);
+      pos.set(0.3, -0.3, -0.62); rot.set(-0.7, -0.9, 0.12);
       if (this.swing > 0) {
         const k = 1 - this.swing / d.rate;
         const s = k < 0.35 ? k / 0.35 : 1 - (k - 0.35) / 0.65;
-        pos.x -= 0.2 * s; pos.y += 0.05 * s; pos.z -= 0.15 * s;
-        rot.x -= 1.3 * s; rot.z += 0.6 * s; rot.y += 0.4 * s;
+        pos.x -= 0.28 * s; pos.y += 0.08 * s; pos.z -= 0.1 * s;
+        rot.x -= 1.1 * s; rot.z += 0.9 * s; rot.y += 0.4 * s;
       }
     } else if (d.cls === 'arremesso') {
-      pos.set(0.16, -0.2, -0.36); rot.set(0, 0, 0);
+      pos.set(0.2, -0.19, -0.5); rot.set(0, 0, 0);
       if (this.throwT > 0) {
         const k = 1 - this.throwT / 0.5;
         if (k < 0.55) { pos.z += 0.1 * (k / 0.55); pos.y += 0.08 * (k / 0.55); }
@@ -493,7 +493,9 @@ const WeaponCtl = {
     } else {
       const hip = this.hipPos();
       const g = this.gun;
-      const ads = [-g.sightX, -g.sightY, -0.115 - g.rearZ];
+      const kind = Models.weapon(this.cur.id).kind;
+      const er = this.cur.att && this.cur.att.opt ? 0.12 : kind === 'pistol' || kind === 'revolver' ? 0.3 : 0.17;
+      const ads = [-g.sightX, -g.sightY, -er - g.rearZ];
       const a = U.smooth(this.adsT);
       pos.set(U.lerp(hip[0], ads[0], a), U.lerp(hip[1], ads[1], a), U.lerp(hip[2], ads[2], a));
       // corrida
@@ -541,15 +543,14 @@ const WeaponCtl = {
     if (d.cls === 'melee') grip.set(0, 0.0, 0);
     if (d.cls === 'arremesso') grip.set(0, 0.02, 0.03);
     if (d.id === 'arco') { grip.set(0, 0, 0.01); }
-    const hr = this.pivot.localToWorld(d.id === 'arco' ? new THREE.Vector3(0.01, 0.03, 0.05 + this.bowDraw / d.draw * 0.22 + 0.3) : grip);
-    if (d.id === 'arco') hr.copy(this.pivot.localToWorld(new THREE.Vector3(0.012, 0.03, 0.05 + 0.33 + this.bowDraw / d.draw * 0.22)));
+    const hr = this.pivot.localToWorld(d.id === 'arco' ? new THREE.Vector3(0.012, 0.03, 0.38 + (this.bowDraw / d.draw) * 0.22) : grip);
     this.handR.position.copy(hr); this.handR.quaternion.copy(this.pivot.quaternion);
-    this.placeArm(this.armR, new THREE.Vector3(0.24, -0.42, 0.12), hr);
+    this.placeArm(this.armR, new THREE.Vector3(0.3, -0.55, 0.02), hr);
     const twoHands = this.gun && !(this.reload && this.reload.kind === 'mag' && this.reload.t / this.reload.T > 0.15 && this.reload.t / this.reload.T < 0.72);
     if (twoHands || d.id === 'arco') {
       const hl = this.pivot.localToWorld(d.id === 'arco' ? new THREE.Vector3(0, 0, 0) : sup);
       this.handL.position.copy(hl); this.handL.quaternion.copy(this.pivot.quaternion);
-      this.placeArm(this.armL, new THREE.Vector3(-0.22, -0.42, 0.06), hl);
+      this.placeArm(this.armL, new THREE.Vector3(-0.26, -0.55, -0.02), hl);
       this.armL.visible = this.handL.visible = true;
     } else if (this.gun && this.reload) {
       // mão esquerda segura o carregador
@@ -558,7 +559,7 @@ const WeaponCtl = {
       mp.y -= 0.05;
       if (k > 0.38 && k < 0.5) mp.y -= 0.08;
       this.handL.position.copy(mp);
-      this.placeArm(this.armL, new THREE.Vector3(-0.22, -0.42, 0.06), mp);
+      this.placeArm(this.armL, new THREE.Vector3(-0.26, -0.55, -0.02), mp);
       this.armL.visible = this.handL.visible = true;
     } else this.armL.visible = this.handL.visible = false;
     this.updateShells(dt);
@@ -585,9 +586,9 @@ const WeaponCtl = {
     if (!this.root.visible) return;
     this.cam.aspect = Game.camera.aspect;
     this.cam.updateProjectionMatrix();
-    this.hemi.intensity = World.hemi.intensity * 0.85 + 0.2 + (Player.flashOn ? 0.6 : 0);
+    this.hemi.intensity = World.hemi.intensity * 1.0 + 0.4 + (Player.flashOn ? 0.6 : 0);
     this.hemi.color.copy(World.hemi.color);
-    this.dirL.intensity = World.sun.intensity * 0.6 + 0.25;
+    this.dirL.intensity = World.sun.intensity * 0.7 + 0.45;
     this.dirL.color.copy(World.sun.color);
     if (Player.inv && Player.inv.colete) this.sleeveMat.color.set(ITEMS[Player.inv.colete.id].color);
     else this.sleeveMat.color.set(0x4a5a3a);
@@ -603,7 +604,7 @@ const WeaponCtl = {
     if (d.cls === 'arremesso') return { name: d.name, ammo: String(it.n), sub: 'Arremessável', mode: '' };
     const res = Game.infinite ? '∞' : Player.ammo(d.cal);
     let mode = MODE_LABEL[this.mode()] || '';
-    if (d.action === 'bolt') mode = 'FERROLHO'; else if (d.action === 'lever') mode = 'ALAVANCA'; else if (d.action === 'pump' && this.mode() !== 'semi') mode = 'BOMBA';
+    if (d.action === 'bolt') mode = 'FERROLHO'; else if (d.action === 'lever') mode = 'ALAVANCA'; else if (d.action === 'pump' && !(d.modes.includes('pump') && this.mode() === 'semi')) mode = 'BOMBA';
     return { name: d.name, ammo: it.ammo + ' / ' + res, sub: CALIBERS[d.cal].name, mode, low: it.ammo <= Math.ceil(this.cap() * 0.2) };
   },
 };

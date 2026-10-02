@@ -3,7 +3,7 @@
 
 // Paleta de acabamentos usada pelos modelos procedurais.
 const C = {
-  BLK: 0x24262b, STL: 0x3b3e44, GUN: 0x2e3137, PARK: 0x45484c, GRY: 0x5d6168, SIL: 0xb9bdc3, CHR: 0xd9dce0,
+  BLK: 0x2c2e33, STL: 0x3b3e44, GUN: 0x2e3137, PARK: 0x45484c, GRY: 0x5d6168, SIL: 0xb9bdc3, CHR: 0xd9dce0,
   WOOD: 0x7a4824, WOODL: 0x9c6534, WOODD: 0x55321a, WOODR: 0x8e3f1e, BAKE: 0x4a2d26,
   TAN: 0xb39a6c, OD: 0x5a6142, GRN: 0x4d5a3b, PLUM: 0x5b2f2c, GOLD: 0xc9a43a, BRASS: 0xb8913a, RED: 0x9c2b22,
 };
@@ -60,14 +60,14 @@ const CLASSES = {
 const CLASS_DEF = {
   pistola: { slot: 'sec', reload: 1.5, recoil: [1.5, 0.5], spread: [1.8, 0.45], adsTime: 0.14, zoom: 1.15, move: 1.0, rails: { tac: 1 }, size: 2 },
   revolver: { slot: 'sec', reload: 0, reloadType: 'shell', shellTime: 0.5, recoil: [3.4, 0.8], spread: [1.6, 0.35], adsTime: 0.16, zoom: 1.15, move: 1.0, rails: {}, size: 2 },
-  smg: { slot: 'pri', reload: 2.0, recoil: [0.75, 0.42], spread: [2.4, 0.55], adsTime: 0.17, zoom: 1.25, move: 0.98, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 4 },
-  fuzil: { slot: 'pri', reload: 2.3, recoil: [1.0, 0.45], spread: [2.8, 0.18], adsTime: 0.22, zoom: 1.3, move: 0.95, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 6 },
-  batalha: { slot: 'pri', reload: 2.6, recoil: [1.6, 0.6], spread: [3.0, 0.14], adsTime: 0.25, zoom: 1.35, move: 0.93, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 6 },
+  smg: { slot: 'pri', reload: 2.0, recoil: [0.75, 0.42], spread: [2.0, 0.55], adsTime: 0.17, zoom: 1.25, move: 0.98, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 4 },
+  fuzil: { slot: 'pri', reload: 2.3, recoil: [1.0, 0.45], spread: [2.3, 0.18], adsTime: 0.22, zoom: 1.3, move: 0.95, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 6 },
+  batalha: { slot: 'pri', reload: 2.6, recoil: [1.6, 0.6], spread: [2.6, 0.14], adsTime: 0.25, zoom: 1.35, move: 0.93, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 6 },
   dmr: { slot: 'pri', reload: 2.6, recoil: [1.9, 0.5], spread: [3.5, 0.08], adsTime: 0.27, zoom: 1.35, move: 0.92, rails: { opt: 1, muz: 1, und: 1, tac: 1 }, size: 6 },
   carabina: { slot: 'pri', reload: 2.2, recoil: [1.3, 0.4], spread: [3.0, 0.15], adsTime: 0.22, zoom: 1.3, move: 0.96, rails: { opt: 1 }, size: 5 },
   sniper: { slot: 'pri', reload: 3.0, action: 'bolt', cycle: 1.0, recoil: [3.2, 0.6], spread: [6, 0.02], adsTime: 0.32, zoom: 1.4, move: 0.9, rails: { opt: 1, muz: 1, und: 1 }, size: 7 },
   espingarda: { slot: 'pri', reloadType: 'shell', shellTime: 0.48, action: 'pump', cycle: 0.5, pellets: 9, choke: 3.2, recoil: [4.0, 1.0], spread: [1.6, 0.7], adsTime: 0.24, zoom: 1.15, move: 0.94, rails: { opt: 1, tac: 1 }, size: 6 },
-  lmg: { slot: 'pri', reload: 5.0, recoil: [0.85, 0.55], spread: [4.2, 0.5], adsTime: 0.35, zoom: 1.3, move: 0.85, rails: { opt: 1, tac: 1 }, bipod: true, size: 9 },
+  lmg: { slot: 'pri', reload: 5.0, recoil: [0.85, 0.55], spread: [3.6, 0.5], adsTime: 0.35, zoom: 1.3, move: 0.85, rails: { opt: 1, tac: 1 }, bipod: true, size: 9 },
   lancador: { slot: 'pri', reload: 3.5, recoil: [5, 1], spread: [2.5, 0.6], adsTime: 0.3, zoom: 1.25, move: 0.86, rails: {}, size: 8 },
   arco: { slot: 'pri', reload: 2.2, recoil: [0.6, 0.2], spread: [3.0, 0.15], adsTime: 0.25, zoom: 1.3, move: 0.97, rails: { opt: 1 }, silent: true, size: 5 },
 };

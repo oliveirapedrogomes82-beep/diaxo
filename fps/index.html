@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Zona Morta</title>
+<meta name="description" content="FPS de sobrevivência em mundo aberto no estilo Unturned, com mais de 100 armas reais.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="view"></div>
+
+<!-- Carregamento -->
+<div id="loading" class="screen">
+  <div class="load-box">
+    <div class="logo">ZONA<span>MORTA</span></div>
+    <div class="load-bar"><i id="load-fill"></i></div>
+    <div id="load-text">Preparando…</div>
+  </div>
+</div>
+
+<!-- Menu principal -->
+<div id="menu" class="screen hidden">
+  <div class="menu-col">
+    <div class="logo big">ZONA<span>MORTA</span></div>
+    <div class="tagline">Sobrevivência em mundo aberto · <b id="gun-count">100+</b> armas reais</div>
+    <button class="mbtn hidden" data-act="continuar" id="btn-continue">▶ Continuar sobrevivência</button>
+    <button class="mbtn primary" data-act="sobrevivencia">Sobrevivência<small>Explore a ilha, saqueie e sobreviva</small></button>
+    <button class="mbtn" data-act="hordas">Hordas<small>Ondas crescentes de zumbis em Santa Cruz</small></button>
+    <button class="mbtn" data-act="arsenal-mode">Campo de tiro<small>Todas as armas e acessórios, munição infinita</small></button>
+    <div class="mrow">
+      <button class="mbtn small" data-act="enciclopedia">Arsenal</button>
+      <button class="mbtn small" data-act="controles">Controles</button>
+      <button class="mbtn small" data-act="config">Ajustes</button>
+    </div>
+  </div>
+  <div class="menu-foot">Clique na tela para controlar a câmera · Esc pausa</div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="cross"><i class="ch t"></i><i class="ch b"></i><i class="ch l"></i><i class="ch r"></i><i class="cdot"></i></div>
+  <div id="hitm"><i></i><i></i><i></i><i></i></div>
+  <div id="reticle"></div>
+  <canvas id="scope" width="1024" height="1024"></canvas>
+  <div id="binoc"></div>
+  <div id="vign"></div>
+  <div id="dmgdir"></div>
+
+  <div id="topbar">
+    <div id="compass"><div id="compass-strip"></div><i class="needle"></i></div>
+  </div>
+  <div id="clock"><b id="clock-time">08:00</b><span id="clock-day">Dia 1</span><span id="loc-name"></span></div>
+  <div id="wave" class="hidden"></div>
+  <div id="rangeinfo" class="hidden"></div>
+  <div id="notes"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="usebar" class="hidden"><span id="use-label"></span><div class="track"><i id="use-fill"></i></div></div>
+
+  <div id="stats">
+    <div class="stat" id="s-hp"><span>❤</span><div class="bar"><i></i></div></div>
+    <div class="stat" id="s-food"><span>🍖</span><div class="bar"><i></i></div></div>
+    <div class="stat" id="s-water"><span>💧</span><div class="bar"><i></i></div></div>
+    <div class="stat" id="s-stam"><span>⚡</span><div class="bar"><i></i></div></div>
+    <div class="stat" id="s-imm"><span>☣</span><div class="bar"><i></i></div></div>
+    <div id="status"></div>
+  </div>
+
+  <div id="weapon">
+    <div id="w-name"></div>
+    <div id="w-ammo"></div>
+    <div id="w-sub"></div>
+    <div id="w-mode"></div>
+  </div>
+  <div id="hotbar"></div>
+  <div id="veh" class="hidden"></div>
+  <div id="fps" class="hidden"></div>
+  <button id="touch-menu" class="hidden" aria-label="Menu">☰</button>
+</div>
+
+<!-- Controles por toque -->
+<div id="touch" class="hidden">
+  <div id="t-stick"><i></i></div>
+  <div id="t-buttons">
+    <button data-t="fire" class="big">🔥</button>
+    <button data-t="ads">◎</button>
+    <button data-t="jump">⤒</button>
+    <button data-t="reload">R</button>
+    <button data-t="use">E</button>
+    <button data-t="crouch">C</button>
+    <button data-t="switch">⇄</button>
+    <button data-t="inv">🎒</button>
+    <button data-t="sprint">»</button>
+    <button data-t="heal">✚</button>
+  </div>
+</div>
+
+<!-- Inventário -->
+<div id="inv" class="panel hidden">
+  <div class="panel-head">
+    <div class="tabs"><button data-tab="itens" class="on">Inventário</button><button data-tab="criar">Criação</button><button data-tab="arsenal" id="tab-arsenal" class="hidden">Arsenal</button></div>
+    <button class="x" data-act="fechar">✕</button>
+  </div>
+  <div class="panel-body" id="inv-body"></div>
+</div>
+
+<!-- Mapa -->
+<div id="map" class="panel hidden">
+  <div class="panel-head"><h2>Mapa da ilha</h2><button class="x" data-act="fechar">✕</button></div>
+  <div class="panel-body map-body"><canvas id="map-canvas" width="1000" height="1000"></canvas></div>
+</div>
+
+<!-- Arsenal (enciclopédia e seleção) -->
+<div id="arsenal" class="panel hidden">
+  <div class="panel-head"><h2 id="ars-title">Arsenal</h2><input id="ars-search" placeholder="Buscar arma, calibre ou país…" autocomplete="off"><button class="x" data-act="fechar">✕</button></div>
+  <div class="panel-body ars-body">
+    <div id="ars-list"></div>
+    <div id="ars-detail">
+      <canvas id="ars-canvas" width="640" height="300"></canvas>
+      <div id="ars-info"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Pausa -->
+<div id="pause" class="screen dim hidden">
+  <div class="menu-col">
+    <div class="logo">PAUSA</div>
+    <button class="mbtn primary" data-act="voltar">Continuar</button>
+    <button class="mbtn" data-act="enciclopedia">Arsenal</button>
+    <button class="mbtn" data-act="controles">Controles</button>
+    <button class="mbtn" data-act="config">Ajustes</button>
+    <button class="mbtn" data-act="sair">Salvar e sair para o menu</button>
+  </div>
+</div>
+
+<!-- Morte -->
+<div id="death" class="screen dim hidden">
+  <div class="menu-col">
+    <div class="logo red">VOCÊ MORREU</div>
+    <div id="death-info"></div>
+    <button class="mbtn primary" data-act="renascer">Renascer</button>
+    <button class="mbtn" data-act="menu">Menu principal</button>
+  </div>
+</div>
+
+<!-- Ajustes -->
+<div id="config" class="panel small hidden">
+  <div class="panel-head"><h2>Ajustes</h2><button class="x" data-act="fechar">✕</button></div>
+  <div class="panel-body cfg">
+    <label>Sensibilidade do mouse <output id="o-sens"></output><input type="range" id="c-sens" min="0.2" max="3" step="0.05"></label>
+    <label>Campo de visão <output id="o-fov"></output><input type="range" id="c-fov" min="60" max="100" step="1"></label>
+    <label>Volume <output id="o-vol"></output><input type="range" id="c-vol" min="0" max="1" step="0.05"></label>
+    <label>Distância de visão <output id="o-dist"></output><input type="range" id="c-dist" min="0.5" max="1.5" step="0.05"></label>
+    <label>Escala de resolução <output id="o-res"></output><input type="range" id="c-res" min="0.5" max="1" step="0.05"></label>
+    <label class="chk"><input type="checkbox" id="c-shadow"> Sombras</label>
+    <label class="chk"><input type="checkbox" id="c-invert"> Inverter eixo Y</label>
+    <label class="chk"><input type="checkbox" id="c-fps"> Mostrar FPS</label>
+  </div>
+</div>
+
+<!-- Controles -->
+<div id="controles" class="panel small hidden">
+  <div class="panel-head"><h2>Controles</h2><button class="x" data-act="fechar">✕</button></div>
+  <div class="panel-body keys">
+    <div><kbd>W A S D</kbd> mover</div><div><kbd>Shift</kbd> correr / prender respiração na luneta</div>
+    <div><kbd>Espaço</kbd> pular</div><div><kbd>C</kbd> agachar · <kbd>Z</kbd> deitar</div>
+    <div><kbd>Botão esq.</kbd> atirar / golpear</div><div><kbd>Botão dir.</kbd> mirar</div>
+    <div><kbd>R</kbd> recarregar</div><div><kbd>B</kbd> modo de tiro</div>
+    <div><kbd>F</kbd> lanterna / laser / faróis</div><div><kbd>E</kbd> pegar, abrir portas, entrar em veículos</div>
+    <div><kbd>1 2 3 4</kbd> / roda do mouse: trocar arma</div><div><kbd>G</kbd> granada rápida</div>
+    <div><kbd>H</kbd> curar rápido</div><div><kbd>V</kbd> binóculo</div>
+    <div><kbd>Tab</kbd> / <kbd>I</kbd> inventário</div><div><kbd>M</kbd> mapa</div>
+    <div><kbd>K</kbd> arsenal (campo de tiro)</div><div><kbd>Q</kbd> buzina (no veículo)</div>
+    <div><kbd>Esc</kbd> pausa</div><div><kbd>X</kbd> largar arma em mãos</div>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/data.js"></script>
+<script src="js/models.js"></script>
+<script src="js/phys.js"></script>
+<script src="js/world.js"></script>
+<script src="js/buildings.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/zombies.js"></script>
+<script src="js/vehicles.js"></script>
+<script src="js/player.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

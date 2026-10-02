@@ -76,7 +76,7 @@ const Phys = {
   // Move um corpo b = {p: Vector3 (pés), v: Vector3, r, h, step, onGround}.
   move(b, dx, dy, dz) {
     const r = b.r;
-    b.hitWall = null;
+    b.hitWall = null; b.hitDoor = null;
     const ax = (d, axis) => {
       if (axis === 0) b.p.x += d; else b.p.z += d;
       const list = this.query(b.p.x - r, b.p.z - r, b.p.x + r, b.p.z + r, this._tmp);
@@ -91,14 +91,21 @@ const Phys = {
           continue;
         }
         b.hitWall = c;
+        if (c.door) b.hitDoor = c.door;
+        // Resolve pelo eixo de menor penetração (evita "teleporte" ao longo de paredes compridas).
+        const pxL = b.p.x + r - c.x0, pxR = c.x1 - (b.p.x - r), pzL = b.p.z + r - c.z0, pzR = c.z1 - (b.p.z - r);
+        const penX = Math.min(pxL, pxR), penZ = Math.min(pzL, pzR);
         if (axis === 0) {
-          if (d > 0) b.p.x = c.x0 - r - 0.001;
-          else if (d < 0) b.p.x = c.x1 + r + 0.001;
-          else b.p.x = b.p.x < (c.x0 + c.x1) / 2 ? c.x0 - r - 0.001 : c.x1 + r + 0.001;
+          if (penX > penZ + 0.02) continue;
+          if (penZ < 0.12 && penX > 0.02) { b.p.z = pzL < pzR ? c.z0 - r - 0.001 : c.z1 + r + 0.001; continue; } // contorna quinas
+          if (d > 0 && pxL < pxR + 0.25) b.p.x = c.x0 - r - 0.001;
+          else if (d < 0 && pxR < pxL + 0.25) b.p.x = c.x1 + r + 0.001;
+          else b.p.x = pxL < pxR ? c.x0 - r - 0.001 : c.x1 + r + 0.001;
         } else {
-          if (d > 0) b.p.z = c.z0 - r - 0.001;
-          else if (d < 0) b.p.z = c.z1 + r + 0.001;
-          else b.p.z = b.p.z < (c.z0 + c.z1) / 2 ? c.z0 - r - 0.001 : c.z1 + r + 0.001;
+          if (penZ > penX + 0.02 || (penX < 0.12 && penZ > 0.02)) { b.p.x = pxL < pxR ? c.x0 - r - 0.001 : c.x1 + r + 0.001; continue; }
+          if (d > 0 && pzL < pzR + 0.25) b.p.z = c.z0 - r - 0.001;
+          else if (d < 0 && pzR < pzL + 0.25) b.p.z = c.z1 + r + 0.001;
+          else b.p.z = pzL < pzR ? c.z0 - r - 0.001 : c.z1 + r + 0.001;
         }
       }
     };
