@@ -95,9 +95,10 @@
       if (reset) delete profiles[role];
       else profiles[role] = next;
       const trial = { ...tx.state, settings: { ...st, profiles } };
+      // antes e depois: não dá para reduzir (nem ampliar) o acesso de quem tem mais acesso que você
       for (const u of tx.list('users')) {
         if (u.role !== role || u.status !== 'ativo') continue;
-        if (!perms.dominates(ctx.user, u, trial)) fail('forbidden', `Esta mudança afetaria ${u.name}, que tem mais acesso do que você.`);
+        if (!perms.dominates(ctx.user, u, tx.state) || !perms.dominates(ctx.user, u, trial)) fail('forbidden', `Esta mudança afetaria ${u.name}, que tem mais acesso do que você.`);
       }
       tx.settings({ profiles });
       const affected = tx.list('users').filter((u) => u.role === role).length;

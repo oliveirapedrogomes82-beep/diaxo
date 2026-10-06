@@ -186,7 +186,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/') && url.pathname !== '/api/changes') log(req.method, url.pathname.replace(/\/(files|preview|history)\/.+/, '/$1/…'), res.statusCode, Date.now() - started + 'ms');
   });
   if (url.pathname.startsWith('/api/')) return api.handle(req, res, url);
-  if (url.pathname === '/index.js' || url.pathname.startsWith('/core/index.js')) {
+  if (url.pathname === '/index.js' || url.pathname.startsWith('/core/index.js') || (!DEMO && (url.pathname === '/demo.html' || url.pathname === '/js/demo-mode.js'))) {
     res.statusCode = 404;
     return res.end();
   }

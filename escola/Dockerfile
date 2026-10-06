@@ -1,12 +1,13 @@
 # Caderneta Escolar — imagem de produção (sem dependências externas)
 FROM node:22-alpine
+# PUBLIC_URL é obrigatória (ex.: https://escola.exemplo.com.br): o TLS fica no proxy (Caddy, nginx…)
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    TRUST_PROXY=1
 WORKDIR /app
 COPY package.json ./
-COPY core ./core
 COPY server ./server
 COPY web ./web
 RUN mkdir -p /data && chown -R node:node /data

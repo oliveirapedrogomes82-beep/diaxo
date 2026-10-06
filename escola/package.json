@@ -5,11 +5,12 @@
   "private": true,
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.16"
   },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "demo": "node --disable-warning=ExperimentalWarning server/index.js --demo",
-    "test": "node --disable-warning=ExperimentalWarning --test test/"
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "test:browser": "node tools/browser-tests.js"
   }
 }

@@ -436,8 +436,8 @@ class Api {
     const body = await readJSON(req, 2000);
     const token = String(body.token || '');
     const u = this.undo.get(token);
-    this.undo.delete(token);
     if (!u || u.userId !== s.user.id || u.sessionHash !== s.tokenHash || u.expires < Date.now()) throw new HttpError(409, 'conflict', 'Não é mais possível desfazer esta ação.');
+    this.undo.delete(token);
     const env = this.viewEnv(s);
     const fpBefore = Perms.fingerprint(s.user, this.state, env);
     const out = E.undo(this.state, s.user, u.record, env);
