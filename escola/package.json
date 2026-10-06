@@ -1,0 +1,15 @@
+{
+  "name": "caderneta-escolar",
+  "version": "2.0.0",
+  "description": "Administração escolar: alunos, turmas, chamada, notas, agenda do aluno, portal da família, atendimentos, financeiro e contas com permissões.",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "demo": "node --disable-warning=ExperimentalWarning server/index.js --demo",
+    "test": "node --disable-warning=ExperimentalWarning --test test/"
+  }
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="same-origin">
+<title>Caderneta Escolar</title>
+<meta name="description" content="Caderneta Escolar: administração escolar com contas por cargo, agenda do aluno, chamada, notas, portal da família e financeiro.">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/modules/equipe.css">
+<link rel="stylesheet" href="css/modules/alunos.css">
+<link rel="stylesheet" href="css/modules/pedagogico.css">
+<link rel="stylesheet" href="css/modules/agenda.css">
+<link rel="stylesheet" href="css/modules/mensagens.css">
+<link rel="stylesheet" href="css/modules/atendimentos.css">
+<link rel="stylesheet" href="css/modules/gestao.css">
+<link rel="stylesheet" href="css/modules/portal.css">
+<link rel="stylesheet" href="css/modules/painel.css">
+</head>
+<body>
+<a class="skip" href="#" data-act="skip">Pular para o conteúdo</a>
+<div id="screen"><div class="auth"><div class="auth-card"><p class="muted">Carregando…</p></div></div></div>
+<div class="app" id="app" hidden>
+  <aside class="sidebar" id="sidebar" aria-label="Menu principal">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <strong id="brandName">Escola</strong>
+        <span id="brandYear"></span>
+      </div>
+      <button type="button" class="icon-btn side-close" data-act="close-menu" aria-label="Fechar menu"><span data-icon="x"></span></button>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <button type="button" class="side-link" data-act="help"><span data-icon="help"></span>Atalhos e ajuda</button>
+    </div>
+  </aside>
+  <div class="scrim" data-act="close-menu" hidden></div>
+
+  <div class="main-col">
+    <header class="topbar">
+      <button type="button" class="icon-btn only-narrow" data-act="open-menu" aria-label="Abrir menu"><span data-icon="menu"></span></button>
+      <button type="button" class="search-trigger" data-act="palette" aria-label="Buscar (Ctrl+K)">
+        <span data-icon="search"></span>
+        <span class="search-text">Buscar…</span>
+        <kbd>Ctrl K</kbd>
+      </button>
+      <div class="top-actions">
+        <button type="button" class="btn primary" data-act="new-menu" aria-haspopup="menu" hidden><span data-icon="plus"></span><span class="hide-xs">Novo</span></button>
+        <button type="button" class="user-btn" id="userBtn" data-act="user-menu" aria-haspopup="menu" aria-label="Minha conta"></button>
+      </div>
+    </header>
+    <div id="banner"></div>
+    <main id="main" tabindex="-1"></main>
+  </div>
+
+  <nav class="tabbar" id="tabbar" aria-label="Atalhos"></nav>
+</div>
+<div id="layer"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script src="core/manifest.js"></script>
+<script src="core/util.js"></script>
+<script src="core/schema.js"></script>
+<script src="core/perms.js"></script>
+<script src="core/rules.js"></script>
+<script src="core/engine.js"></script>
+<script src="core/view.js"></script>
+<script src="core/seed.js"></script>
+<script src="core/migrate.js"></script>
+<script src="core/commands/shared.js"></script>
+<script src="core/commands/escola.js"></script>
+<script src="core/commands/equipe.js"></script>
+<script src="core/commands/alunos.js"></script>
+<script src="core/commands/pedagogico.js"></script>
+<script src="core/commands/agenda.js"></script>
+<script src="core/commands/mensagens.js"></script>
+<script src="core/commands/atendimentos.js"></script>
+<script src="core/commands/comunicacao.js"></script>
+<script src="core/commands/financeiro.js"></script>
+<script src="js/util.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pages/painel.js"></script>
+<script src="js/pages/equipe.js"></script>
+<script src="js/pages/alunos.js"></script>
+<script src="js/pages/matricula.js"></script>
+<script src="js/pages/turmas.js"></script>
+<script src="js/pages/chamada.js"></script>
+<script src="js/pages/notas.js"></script>
+<script src="js/pages/agenda.js"></script>
+<script src="js/pages/rotina.js"></script>
+<script src="js/pages/calendario.js"></script>
+<script src="js/pages/comunicados.js"></script>
+<script src="js/pages/mensagens.js"></script>
+<script src="js/pages/atendimentos.js"></script>
+<script src="js/pages/financeiro.js"></script>
+<script src="js/pages/relatorios.js"></script>
+<script src="js/pages/configuracoes.js"></script>
+<script src="js/pages/atividades.js"></script>
+<script src="js/pages/portal.js"></script>
+</body>
+</html>
