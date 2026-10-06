@@ -1,9 +1,11 @@
 # diaxo
 
-Projetos web estáticos, sem dependências nem etapa de build: basta abrir no navegador.
+Projetos web sem dependências nem etapa de build.
 
-- [`escola/`](escola/): **Caderneta Escolar**, app de administração escolar (alunos, turmas, chamada, notas,
-  financeiro, agenda, comunicados e relatórios). Veja [escola/README.md](escola/README.md).
+- [`escola/`](escola/): **Caderneta Escolar**, sistema de administração escolar com contas por cargo
+  (acessos definidos pela direção), agenda do aluno, chamada, notas, Portal da família, atendimentos e
+  financeiro. Tem servidor próprio (Node.js, sem dependências) e uma demonstração que roda no navegador
+  (`escola/web/demo.html`). Veja [escola/README.md](escola/README.md).
 - [`index.html`](index.html): **Árvore ao vento**, descrita abaixo.
 
 ## Árvore ao vento
