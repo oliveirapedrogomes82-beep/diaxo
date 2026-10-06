@@ -1,16 +1,24 @@
-# Árvore ao vento
+# diaxo
+
+Projetos web estáticos, sem dependências nem etapa de build: basta abrir no navegador.
+
+- [`escola/`](escola/): **Caderneta Escolar**, app de administração escolar (alunos, turmas, chamada, notas,
+  financeiro, agenda, comunicados e relatórios). Veja [escola/README.md](escola/README.md).
+- [`index.html`](index.html): **Árvore ao vento**, descrita abaixo.
+
+## Árvore ao vento
 
 Simulação de uma árvore balançando ao vento enquanto suas folhas se soltam, flutuam e se acumulam no chão.
 É uma página única (`index.html`), sem dependências nem etapa de build: basta abri-la no navegador.
 
-## Como usar
+### Como usar
 
 - **Arraste** na tela para soprar o vento (para a direita ou para a esquerda); um **toque** dá uma rajada.
 - **Painel**: intensidade do vento, quantidade de folhas, estação (outono, verão, cerejeira em flor),
   rebrota contínua das folhas, rajada, pausa, reiniciar e gerar uma nova árvore.
 - **Teclado**: `Espaço` pausa/continua, `G` dá uma rajada.
 
-## Como funciona
+### Como funciona
 
 - **Árvore procedural**: troncos e galhos são gerados recursivamente (semente determinística) e cada galho
   herda o movimento do anterior, então a ponta dos galhos finos balança mais que o tronco.
