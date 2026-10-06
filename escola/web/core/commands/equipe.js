@@ -30,13 +30,13 @@
       const email = V.email(input.email ?? (cur && cur.email), 'E-mail');
       const phone = V.phone(input.phone ?? (cur && cur.phone), 'Celular');
       const login = input.login === undefined ? (cur ? cur.login : true) : V.bool(input.login);
-      if (login && !email && !phone) fail('invalid', 'Para entrar no sistema a pessoa precisa de e-mail ou celular.');
+      if (login && !email && !phone) fail('invalid', 'Para entrar no sistema a pessoa precisa de e-mail ou celular.', 'email');
       X.uniqueLogin(tx, { email, phone, exceptId: cur && cur.id });
       const roleDef = perms.ROLE[role];
       const scope = V.oneOf(input.scope || (cur && cur.scope) || roleDef.scope, 'Turmas que pode ver', ['todas', 'segmentos', 'vinculos']);
       if (scope === 'todas' && !ctx.all) fail('forbidden', 'Você não pode dar acesso a todas as turmas, porque não tem esse acesso.');
       const segments = (Array.isArray(input.segments) ? input.segments : (cur && cur.segments) || []).filter((x) => SEGMENTS.includes(x));
-      if (scope === 'segmentos' && !segments.length) fail('invalid', 'Escolha as etapas de ensino que a pessoa pode ver.');
+      if (scope === 'segmentos' && !segments.length) fail('invalid', 'Escolha as etapas de ensino que a pessoa pode ver.', 'segments');
       const classIds = V.ids(input.classIds ?? (cur && cur.classIds), 'Turmas vinculadas', { max: 200 }).filter((id) => tx.get('classes', id));
       const linkedStudentIds = V.ids(input.linkedStudentIds ?? (cur && cur.linkedStudentIds), 'Alunos acompanhados', { max: 200 }).filter((id) => tx.get('students', id));
       if (!ctx.all) {
@@ -46,7 +46,7 @@
       const subjectIds = V.ids(input.subjectIds ?? (cur && cur.subjectIds), 'Disciplinas', { max: 30 }).filter((id) => tx.get('subjects', id));
       const area = input.area === undefined ? (cur ? cur.area : roleDef.area || null) : V.oneOf(input.area || null, 'Área', AREAS, { required: false });
       const validUntil = V.date(input.validUntil === undefined ? cur && cur.validUntil : input.validUntil, 'Acesso até');
-      if (validUntil && validUntil < env.today) fail('invalid', 'A data final do acesso já passou.');
+      if (validUntil && validUntil < env.today && (!cur || validUntil !== cur.validUntil)) fail('invalid', 'A data final do acesso já passou.', 'validUntil');
       const wanted = Array.isArray(input.perms) ? perms.withImplied(perms.clean(input.perms)) : cur ? [...perms.effective({ ...cur, status: 'ativo' }, st)] : perms.profile(role, st);
       // sem escalada: só concede o que tem (permissões confidenciais à parte)
       const mine = perms.effective(ctx.user, st);
@@ -61,7 +61,9 @@
       const trial = { ...tx.state, users: tx.state.users.filter((u) => u.id !== doc.id).concat([doc]) };
       if (!perms.dominates(ctx.user, doc, trial)) fail('forbidden', 'Com esses acessos a pessoa passaria a ter mais acesso do que você.');
       tx.put('users', doc);
-      if (cur) X.endSessionsEffect(tx, doc.id);
+      // encerra as sessões só quando muda o acesso ou o login (corrigir um nome não tira a pessoa do sistema)
+      const ACCESS = ['role', 'email', 'phone', 'login', 'validUntil', 'grants', 'revokes', 'scope', 'segments', 'classIds', 'linkedStudentIds', 'area'];
+      if (cur && ACCESS.some((k) => util.canonical(cur[k] ?? null) !== util.canonical(doc[k] ?? null))) X.endSessionsEffect(tx, doc.id);
       const confidential = wanted.filter((p) => perms.CONFIDENTIAL.has(p) && !mine.has(p));
       tx.summary = cur ? `Conta de ${name} atualizada` : `Conta de ${name} criada (${perms.roleLabel(role)})`;
       if (confidential.length) tx.summary += ` — com acesso confidencial: ${confidential.map(perms.label).join(', ')}`;
@@ -94,6 +96,7 @@
       const cur = tx.need('users', input.id, 'Pessoa');
       needDominance(tx, ctx, cur);
       if (cur.status !== 'ativo') fail('conflict', `${cur.name} está com a conta desativada.`);
+      if (!cur.email && !cur.phone) fail('invalid', `Cadastre um e-mail ou celular de ${cur.name} antes: é com um deles que a pessoa entra.`);
       if (!cur.login) tx.put('users', { ...cur, login: true });
       X.inviteEffect(tx, cur.id, env, input.reset ? 'redefinicao' : 'convite');
       X.endSessionsEffect(tx, cur.id);
@@ -112,9 +115,16 @@
         tx.list('classes').some((c) => c.teacherId === cur.id || (c.assistantIds || []).includes(cur.id) || Object.values(c.subjects || {}).includes(cur.id)) ||
         tx.list('diary').some((d) => d.authorId === cur.id) ||
         tx.list('support').some((r) => r.authorId === cur.id) ||
-        tx.list('messages').some((m) => (m.posts || []).some((p) => p.userId === cur.id)) ||
-        Object.values(tx.state.attendance).some((a) => a.by === cur.id);
+        tx.list('messages').some((m) => m.createdBy === cur.id || (m.posts || []).some((p) => p.userId === cur.id)) ||
+        tx.list('plans').some((p) => p.authorId === cur.id) ||
+        tx.list('notices').some((n) => n.authorId === cur.id) ||
+        tx.list('events').some((e) => e.authorId === cur.id) ||
+        tx.list('invoices').some((i) => i.receivedBy === cur.id || (i.reversals || []).some((r) => r.by === cur.id)) ||
+        Object.values(tx.state.attendance).some((a) => a.by === cur.id) ||
+        Object.values(tx.state.routines).some((r) => r.by === cur.id) ||
+        Object.values(tx.state.councils).some((c) => c.by === cur.id);
       if (used) fail('conflict', `${cur.name} já tem registros no sistema. Desative a conta em vez de excluir.`);
+      if (tx.list('students').some((st) => (st.guardians || []).some((g) => g.userId === cur.id))) fail('conflict', `${cur.name} também é responsável por um aluno. Desative a conta em vez de excluir.`);
       tx.del('users', cur.id);
       X.endSessionsEffect(tx, cur.id);
       tx.effect({ type: 'deleteCredentials', userId: cur.id });
@@ -134,8 +144,8 @@
       if (!ctx.all) fail('forbidden', 'Só quem enxerga todas as turmas pode definir vínculos.');
       const u = X.staffUser(tx, input.userId, 'Pessoa');
       if (u.id === ctx.user.id) fail('forbidden', 'Peça a outra pessoa da gestão para vincular você a uma turma.');
-      if (!perms.dominates(ctx.user, u, tx.state) && !ctx.can('usuarios.gerenciar')) {
-        // sem gerenciar contas, ainda pode montar turmas — mas não sobre quem tem mais acesso
+      if (!perms.dominates(ctx.user, u, tx.state)) {
+        // sem dominância (inclusive sem gerenciar contas) ainda pode montar turmas — mas não sobre quem tem mais acesso
         const mine = perms.effective(ctx.user, tx.state.settings);
         for (const p of perms.effective(u, tx.state.settings)) if (!perms.CONFIDENTIAL.has(p) && !mine.has(p)) fail('forbidden', `Você não pode alterar os vínculos de ${u.name}.`);
       }

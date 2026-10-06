@@ -1,1 +1,256 @@
-/* Estilos do módulo: alunos */
+/* Estilos do módulo: alunos (lista, ficha, responsáveis, matrícula, convites, widgets).
+   Só variáveis de cor de css/app.css (tema claro e escuro). Prefixo: al- */
+
+/* ---------- lista ---------- */
+.al-head-actions { flex-wrap: wrap; }
+.al-toolbar .search-box { flex: 1 1 260px; }
+.al-toolbar .al-sel { width: auto; max-width: 100%; }
+.al-chip { height: 40px; cursor: pointer; }
+.al-chip .i { width: 16px; height: 16px; }
+.al-chip[aria-pressed="true"] .i { color: var(--bad); }
+.al-count { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.al-list { overflow: hidden; }
+.al-table .person { align-items: flex-start; }
+.al-table .person > .avatar { margin-top: 2px; }
+.al-table td { vertical-align: top; }
+.al-cls { font-weight: 600; display: block; }
+.al-shift { display: block; }
+.al-gn { display: block; font-weight: 500; }
+.al-td-g .person-sub { white-space: normal; }
+.al-flags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.al-hp { height: 22px; padding: 0 8px 0 6px; gap: 4px; cursor: default; }
+.al-hp .i { width: 13px; height: 13px; }
+.al-sort {
+  all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; border-radius: 4px;
+}
+.al-sort:hover, .al-sort.on { color: var(--fg); }
+.al-sort:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.al-sort .i { width: 14px; height: 14px; }
+.al-sort .i.al-up { transform: rotate(180deg); }
+.al-more { display: flex; justify-content: center; padding: 14px; border-top: 1px solid var(--line); }
+
+/* ---------- ficha: cabeçalho ---------- */
+.al-head { overflow: hidden; }
+.al-head .profile-head { align-items: flex-start; }
+.al-head .profile-head .grow { padding-top: 4px; }
+.al-head h1 { overflow-wrap: anywhere; }
+.al-photo, .al-photo-wrap { position: relative; flex: none; display: inline-grid; border-radius: 50%; }
+.al-photo { border: 0; padding: 0; background: none; cursor: pointer; }
+.al-photo .avatar.lg, .al-photo-wrap .avatar.lg { width: 76px; height: 76px; font-size: 1.4rem; }
+.al-photo:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.al-photo-cam {
+  position: absolute; right: -2px; bottom: -2px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface); color: var(--fg-2);
+  border: 1px solid var(--line-strong); box-shadow: var(--shadow-1);
+}
+.al-photo-cam .i { width: 15px; height: 15px; }
+.al-photo:hover .al-photo-cam { color: var(--accent-text); border-color: var(--primary); }
+.al-actions { align-self: center; }
+.al-stripes { display: grid; gap: 8px; padding: 0 20px 18px; }
+.al-alert {
+  display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--bad-soft); color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+}
+.al-alert > .i { color: var(--bad); width: 22px; height: 22px; margin-top: 1px; }
+.al-alert > div { min-width: 0; }
+.al-alert b { display: block; color: var(--bad); font-size: .74rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 2px; }
+.al-alert p { font-weight: 500; }
+.al-alert.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.al-alert.warn > .i, .al-alert.warn b { color: var(--warn); }
+.al-statusbar { padding: 10px 14px; }
+.al-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.al-tabs { margin-bottom: -8px; }
+.al-tabs .badge { margin-left: 2px; }
+
+/* ---------- ficha: aba Dados e família ---------- */
+.al-cols { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.al-cols > * { min-width: 0; }
+.al-cols-hist { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.al-guardians { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.al-gcard {
+  display: grid; gap: 10px; align-content: start; min-width: 0;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+.al-gcard.blocked { background: color-mix(in srgb, var(--bad-soft) 45%, var(--surface)); border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); }
+.al-gtop { display: flex; gap: 10px; align-items: flex-start; }
+.al-gtop .grow { flex: 1; min-width: 0; display: grid; }
+.al-gtop .icon-btn { margin: -4px -6px 0 0; }
+.al-gname { overflow-wrap: anywhere; line-height: 1.3; }
+.al-gcontact { display: grid; gap: 4px; min-width: 0; }
+.al-contact { display: flex; align-items: center; gap: 6px; font-size: .9rem; min-width: 0; flex-wrap: wrap; }
+.al-contact > .i { color: var(--fg-3); width: 16px; height: 16px; }
+.al-contact a:not(.btn) { color: var(--fg); text-decoration: none; }
+.al-contact a:not(.btn):hover { color: var(--accent-text); text-decoration: underline; }
+.al-mail { overflow-wrap: anywhere; min-width: 0; }
+.al-wa { height: 26px; padding: 0 8px; font-size: .78rem; color: var(--ok); }
+.al-warn-text { color: var(--warn); display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+.al-warn-text .i { width: 15px; height: 15px; }
+.al-marks { display: flex; flex-wrap: wrap; gap: 5px; }
+.al-marks .pill { height: 22px; font-size: .74rem; }
+.al-portal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--line); font-size: .86rem; }
+.al-portal .grow { flex: 1; min-width: 150px; }
+.al-portal .person-sub { display: block; white-space: normal; }
+.al-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--line-strong); align-self: flex-start; margin-top: 6px; }
+.al-dot.ok { background: var(--ok); }
+.al-dot.warn { background: var(--warn); }
+.al-dot.bad { background: var(--bad); }
+.al-sub { font-size: .76rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 8px; font-family: var(--font-body); }
+.al-pickup { display: grid; gap: 18px; }
+.al-who { display: flex; flex-wrap: wrap; gap: 8px; }
+.al-who-item { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .88rem; max-width: 100%; }
+.al-who-item > span:last-child { display: grid; line-height: 1.2; min-width: 0; }
+.al-who-item b { font-weight: 600; overflow-wrap: anywhere; }
+.al-kitems > li { padding: 9px 0; align-items: flex-start; }
+.al-kitems .avatar { margin-top: 2px; }
+.al-kdoc { display: flex; flex-wrap: wrap; gap: 2px 12px; white-space: normal; }
+.al-health { display: grid; gap: 16px; }
+.al-alert-text { color: var(--bad); font-weight: 600; }
+.al-flush { padding: 0 0 4px; }
+.al-flush .table th:first-child, .al-flush .table td:first-child { padding-left: 20px; }
+.al-hist-empty { padding: 12px 20px 14px; display: flex; gap: 8px; align-items: center; border-top: 1px solid var(--line); }
+
+/* ---------- modais: situação, turma, convites ---------- */
+.al-status-grid { display: grid; gap: 10px; }
+.al-status-grid .pick strong { display: flex; align-items: center; gap: 8px; }
+.al-status-grid .pick .pill { height: 20px; font-size: .7rem; }
+.al-st-hint { margin-top: 12px; display: flex; gap: 8px; align-items: flex-start; }
+.al-picks .pick span:last-child { font-weight: 600; }
+.al-free { color: var(--ok) !important; }
+.al-full { color: var(--warn) !important; }
+.al-pick-cur { opacity: .6; cursor: default; }
+.al-inv-sum { display: grid; gap: 14px; margin-top: 16px; }
+.al-inv-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.al-inv-stat { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--line); }
+.al-inv-stat b { font: 700 1.5rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.al-inv-stat span { font-size: .8rem; color: var(--fg-3); line-height: 1.3; }
+.al-inv-stat.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.al-inv-stat.ok b { color: var(--ok); }
+.al-inv-list summary { cursor: pointer; font-weight: 600; font-size: .9rem; color: var(--accent-text); }
+.al-inv-list ul { margin-top: 6px; max-height: 240px; overflow: auto; }
+.al-icards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.al-icard { display: grid; gap: 10px; padding: 14px; border: 1.5px dashed var(--line-strong); border-radius: var(--radius); background: var(--surface); break-inside: avoid; }
+.al-icard-top .person-sub { white-space: normal; display: block; }
+.al-icard-name { display: block; font-size: 1rem; }
+.al-icode { font: 700 1.45rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .12em; text-align: center; padding: 12px 6px; border-radius: 10px; background: var(--mark); color: var(--on-mark); user-select: all; }
+.al-ihow { font-size: .82rem; color: var(--fg-2); }
+.al-ilink { font-weight: 600; overflow-wrap: anywhere; word-break: break-all; }
+.al-iacts .btn { flex: 1 1 auto; }
+
+/* folha impressa de convites (fica escondida na tela) */
+.al-print-host { display: none; }
+@media print {
+  body.al-printing > *:not(.al-print-host) { display: none !important; }
+  body.al-printing .al-print-host { display: block; }
+  .al-sheet { padding: 0; color: #000; }
+  .al-sheet-head { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 14px; }
+  .al-sheet-head h1 { font-size: 1.2rem; margin: 2px 0; }
+  .al-sheet-head p { font-size: .85rem; }
+  .al-sheet .al-icards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .al-sheet .al-icard { border-color: #777; }
+  .al-sheet .al-icode { background: #fff; border: 2px solid #000; color: #000; }
+}
+
+/* ---------- matrícula (assistente) ---------- */
+.al-wiz .al-steps { padding-top: 12px; }
+.al-wiz .step b .i { width: 13px; height: 13px; stroke-width: 3; }
+.al-lead { margin-bottom: 14px; }
+.al-wiz .notice.warn { margin-bottom: 16px; }
+.al-gforms { display: grid; gap: 14px; }
+.al-gblock { position: relative; margin: 0; padding: 14px 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); min-width: 0; }
+.al-gblock legend { padding: 0 6px; margin-left: -6px; font-weight: 700; font-size: .9rem; }
+.al-gblock-x { position: absolute; top: -4px; right: 6px; background: var(--surface); border-color: var(--line); }
+.al-gblock .form-grid { gap: 12px 14px; }
+.al-checks { display: flex; flex-wrap: wrap; gap: 10px 22px; padding-top: 2px; }
+.al-checks .check { font-size: .9rem; }
+.al-add { justify-self: start; }
+.form-grid .form-h.al-first { margin-top: 0; padding-top: 0; border-top: 0; }
+.al-sib { border: 1px solid var(--line); border-radius: var(--radius); padding: 0 14px; margin-bottom: 14px; background: var(--surface); }
+.al-sib summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 11px 0; font-weight: 600; font-size: .9rem; color: var(--accent-text); list-style: none; }
+.al-sib summary::-webkit-details-marker { display: none; }
+.al-sib-body { display: grid; gap: 8px; padding-bottom: 12px; }
+.al-sib-list { display: grid; gap: 4px; }
+.al-sib-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.al-sib-item:hover, .al-sib-item:focus-visible { border-color: var(--primary); background: var(--accent-soft); }
+.al-sib-item .grow { flex: 1; min-width: 0; display: grid; }
+.al-sib-item .person-sub { white-space: normal; }
+.al-rev { padding: 14px 0; border-top: 1px solid var(--line); }
+.al-rev:first-of-type { border-top: 0; padding-top: 0; }
+.al-rev-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.al-rev-list > li { align-items: flex-start; }
+.al-rev-list .al-marks { margin-top: 6px; }
+.al-seq { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.al-done { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 18px 0 22px; }
+.al-done-icon { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); }
+.al-done-icon .i { width: 30px; height: 30px; stroke-width: 2.6; }
+.al-done h3 { font-size: 1.25rem; }
+.al-next { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--surface-2); display: grid; gap: 6px; }
+.al-next .items > li { padding: 9px 0; }
+
+/* ---------- painel ---------- */
+.al-widget { height: 100%; }
+.al-widget .card-head h2 { display: flex; align-items: center; gap: 8px; }
+.al-widget .card-head h2 .i { color: var(--fg-3); }
+.al-widget .items > li { padding: 9px 0; }
+.al-widget .person-name { white-space: normal; }
+.al-walerts > li { align-items: flex-start; }
+.al-walert { font-size: .84rem; color: var(--bad); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.al-wmore { margin-top: 8px; }
+.al-wempty { padding: 6px 0 4px; }
+
+/* ---------- responsivo ---------- */
+@media (max-width: 1020px) {
+  .al-cols, .al-cols-hist { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .al-head-actions { width: 100%; }
+  .al-head-actions .btn { flex: 1 1 auto; }
+  .al-toolbar .al-sel { flex: 1 1 150px; }
+  .al-chip { flex: 1 1 100%; justify-content: center; }
+  .al-table tr { grid-template-columns: minmax(0, 1fr) auto; }
+  .al-table td.al-td-g { grid-column: 1 / -1; }
+  .al-table .al-shift { display: none; }
+  .al-table td.end { grid-column: 2; grid-row: 2; }
+  .al-head .profile-head { gap: 14px; }
+  .al-photo .avatar.lg, .al-photo-wrap .avatar.lg { width: 64px; height: 64px; font-size: 1.2rem; }
+  .al-head .profile-head .grow { min-width: 0; flex-basis: calc(100% - 82px); }
+  .al-actions { width: 100%; }
+  .al-actions .btn { flex: 1 1 auto; }
+  .al-stripes { padding: 0 14px 14px; }
+  .al-guardians { grid-template-columns: minmax(0, 1fr); }
+  .al-inv-stats { grid-template-columns: minmax(0, 1fr); }
+  .al-inv-stat { grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
+  .al-flush .table th:first-child, .al-flush .table td:first-child { padding-left: 0; }
+  .al-flush .table.responsive tr { padding: 12px 14px; }
+  .al-wiz .al-step-l { display: none; }
+  .al-wiz .step.current .al-step-l { display: inline; }
+  .al-gblock { padding: 12px 12px 14px; }
+}
+
+/* ---------- ajustes finos (lista e cartões) ---------- */
+[data-al-results] { display: grid; gap: 10px; }
+.al-count { margin-bottom: 0; min-height: 24px; }
+.al-table th.al-th-class { width: 20%; }
+.al-table th.al-th-g { width: 30%; }
+.al-table th.al-th-p { width: 17%; }
+.al-tel { white-space: nowrap; }
+.al-wa {
+  margin-left: auto; display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px;
+  background: var(--ok-soft); color: var(--ok) !important; font-size: .76rem; font-weight: 700; text-decoration: none !important;
+}
+.al-wa:hover { background: color-mix(in srgb, var(--ok) 22%, var(--surface)); }
+.al-contact { flex-wrap: nowrap; }
+.al-mail { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-contact .copy-btn { flex: none; display: inline-grid; place-items: center; }
+.al-contact .copy-btn .i { width: 15px; height: 15px; }
+@media (max-width: 640px) {
+  .al-toolbar .al-sel { min-width: 0; flex: 1 1 140px; }
+  .al-chip { flex: 1 1 140px; min-width: 0; }
+}
+
+/* Gavetas do módulo: a linha da grade do overlay fica do tamanho da tela, para o corpo rolar e o rodapé
+   (Salvar / Continuar) ficar sempre visível mesmo em formulários longos. */
+.overlay.drawer-wrap.al-dw { grid-template-rows: minmax(0, 1fr); }
+.overlay.drawer-wrap.al-dw > .modal { min-height: 0; }
+.overlay.drawer-wrap.al-dw .modal-body { min-height: 0; flex: 1 1 auto; }

@@ -89,10 +89,14 @@
       const reset = V.bool(input.reset);
       const next = reset ? null : perms.withImplied(perms.clean(input.perms));
       const mine = perms.effective(ctx.user, st);
+      // o perfil atual também precisa caber no acesso do ator (senão quem tem menos acesso tiraria acessos de um cargo acima)
+      for (const p of perms.profile(role, st)) if (!perms.CONFIDENTIAL.has(p) && !mine.has(p)) fail('forbidden', `O perfil "${perms.roleLabel(role)}" tem acessos que você não tem ("${perms.label(p)}"). Só quem tem todos eles pode alterá-lo.`);
       if (next) for (const p of next) if (!perms.CONFIDENTIAL.has(p) && !mine.has(p)) fail('forbidden', `Você não pode dar "${perms.label(p)}", porque não tem essa permissão.`);
       // dominância sobre todos os afetados, com o perfil novo
       const profiles = { ...(st.profiles || {}) };
-      if (reset) delete profiles[role];
+      const system = perms.ROLE[role].perms;
+      // igual ao padrão do sistema: volta a ser o padrão (não fica marcado como personalizado)
+      if (reset || (next.length === system.length && next.every((p) => system.includes(p)))) delete profiles[role];
       else profiles[role] = next;
       const trial = { ...tx.state, settings: { ...st, profiles } };
       // antes e depois: não dá para reduzir (nem ampliar) o acesso de quem tem mais acesso que você
@@ -118,6 +122,7 @@
       const to = X.staffUser(tx, input.userId, 'Nova conta titular');
       if (to.id === ctx.user.id) fail('invalid', 'Escolha outra pessoa.');
       if (!to.login) fail('invalid', `${to.name} precisa ter acesso ao sistema para ser titular.`);
+      if (to.validUntil) fail('invalid', `${to.name} tem acesso com prazo (até ${to.validUntil.split('-').reverse().join('/')}). A conta titular não pode ter prazo.`);
       tx.settings({ ownerId: to.id });
       tx.summary = `Titularidade da conta transferida para ${to.name}`;
       tx.audit = { entity: 'users', ids: [to.id] };

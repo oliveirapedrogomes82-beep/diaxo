@@ -99,6 +99,15 @@
       if (!gs.length) fail('invalid', 'Cadastre pelo menos um responsável.');
       s.guardians = gs.map((g) => guardianFrom(g, null, ctx, env));
       if (!s.guardians.some((g) => g.phone)) fail('invalid', 'Informe o celular de pelo menos um responsável.');
+      // pessoas autorizadas a buscar (opcional, até 10), com as mesmas regras de students.pickup.save
+      const ps = Array.isArray(input.pickup) ? input.pickup.filter((p) => p && typeof p === 'object').slice(0, 10) : [];
+      s.pickup = ps.map((p) => ({
+        id: env.newId('k'),
+        name: V.str(p.name, 'Nome da pessoa autorizada', { required: true, max: 120 }),
+        relation: V.str(p.relation, 'Parentesco da pessoa autorizada', { max: 40 }),
+        document: V.str(p.document, 'Documento da pessoa autorizada', { max: 40 }),
+        phone: V.phone(p.phone, 'Telefone da pessoa autorizada'),
+      }));
       tx.put('students', s);
       tx.settings({ nextSeq: seq + 1 });
       let invoices = 0;
@@ -122,6 +131,21 @@
       const p = input.patch && typeof input.patch === 'object' ? input.patch : {};
       const next = applyStudentFields({ ...cur }, p, ctx, env, false);
       if (has(p, 'classId') && p.classId !== cur.classId) next.classId = targetClass(tx, ctx, p.classId);
+      // foto: arquivo de imagem enviado por quem edita (ou já ligado a este aluno); a anterior fica livre
+      if (has(p, 'photo')) {
+        const prev = cur.photo || null;
+        const photo = p.photo == null || p.photo === '' ? null : V.id(p.photo, 'Foto');
+        if (photo !== prev) {
+          if (photo) {
+            const f = tx.get('files', photo);
+            if (!f) fail('invalid', 'A foto não foi encontrada. Envie a imagem de novo.');
+            if (!/^image\/(png|jpeg|webp)$/.test(f.type)) fail('invalid', 'A foto precisa ser uma imagem PNG, JPEG ou WEBP.');
+            X.attachFiles(tx, ctx, [photo], { coll: 'students', id: cur.id }, { max: 1 });
+          }
+          X.releaseFiles(tx, prev ? [prev] : [], photo ? [photo] : [], { coll: 'students', id: cur.id });
+          next.photo = photo;
+        }
+      }
       tx.put('students', next);
       const moved = next.classId !== cur.classId;
       tx.summary = moved ? `${next.name} mudou para o ${(tx.get('classes', next.classId) || {}).name || 'grupo sem turma'}` : `Cadastro de ${next.name} atualizado`;
@@ -244,7 +268,7 @@
    * family.invite {studentId, guardianId}: cria (ou reaproveita, pelo celular/e-mail) a conta do responsável,
    * vincula ao aluno e gera um código de primeiro acesso (devolvido só a quem convidou).
    */
-  const inviteGuardian = (tx, ctx, env, s, g, purpose) => {
+  const inviteGuardian = (tx, ctx, env, s, g, purpose, issued = null) => {
     if (!g.phone && !g.email) fail('invalid', `Cadastre o celular ou o e-mail de ${g.name} antes de convidar.`);
     if (g.bloqueado) fail('conflict', `${g.name} está com o acesso bloqueado.`);
     let user = g.userId ? tx.get('users', g.userId) : null;
@@ -263,6 +287,9 @@
     tx.put('students', { ...s, guardians });
     // conta de equipe que também é responsável: só vincula; o acesso dela continua o mesmo
     if (user.role !== 'responsavel') return { userId: user.id, code: null };
+    // no convite em lote, a mesma conta (irmãos com o mesmo responsável) recebe um código só
+    if (issued && issued.has(user.id)) return { userId: user.id, code: null };
+    if (issued) issued.add(user.id);
     const inv = X.inviteEffect(tx, user.id, env, purpose);
     if (purpose === 'convite') tx.effect({ type: 'notifyGuardians', studentId: s.id, reason: 'novo acesso', except: user.id });
     return { userId: user.id, code: inv.code };
@@ -288,14 +315,14 @@
       const c = tx.need('classes', input.classId, 'Turma');
       ctx.needClass(c.id);
       let n = 0;
+      const issued = new Set();
       for (const s0 of tx.list('students').slice()) {
         if (s0.classId !== c.id || s0.status !== 'ativo' || s0.noDigitalAccess) continue;
         for (const g of s0.guardians || []) {
           const s = tx.get('students', s0.id);
           const cur = s.guardians.find((x) => x.id === g.id);
           if (!cur || cur.userId || !cur.pedagogico || cur.bloqueado || (!cur.phone && !cur.email)) continue;
-          inviteGuardian(tx, ctx, env, s, cur, 'convite');
-          n++;
+          if (inviteGuardian(tx, ctx, env, s, cur, 'convite', issued).code) n++;
         }
       }
       tx.summary = `${n} convite${n === 1 ? '' : 's'} de acesso gerado${n === 1 ? '' : 's'} para as famílias do ${c.name}`;
