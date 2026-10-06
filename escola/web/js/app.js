@@ -56,6 +56,8 @@ const App = (() => {
     const home = list.find((p) => p.id === (Store.family ? 'inicio' : 'painel'));
     return (home || list[0] || { id: 'painel' }).id;
   };
+  /** nav: false esconde do menu (a rota continua valendo); nav: () => boolean decide na hora. */
+  const inNav = (p) => p.nav !== false && (typeof p.nav !== 'function' || !!p.nav());
   const allowedStudentTabs = (s) => studentTabs.filter((t) => allowed(t, s)).sort(sortDefs);
   const allowedWidgets = () => widgets.filter((w) => allowed(w)).sort(sortDefs);
   const allowedActions = () => actions.filter((a) => allowed(a)).sort(sortDefs);
@@ -474,7 +476,7 @@ const App = (() => {
 
   const renderNav = () => {
     const [name] = route();
-    const list = visiblePages().filter((p) => p.nav !== false);
+    const list = visiblePages().filter(inNav);
     const groups = Store.family ? FAMILY_GROUPS : GROUPS.concat([...new Set(list.map((p) => p.group))].filter((g) => !GROUPS.includes(g)));
     const link = (p) => html`<a class="side-link ${name === p.id ? 'active' : ''}" href="#${p.id}" ${name === p.id ? raw('aria-current="page"') : ''}>${icon(p.icon || 'grid')}<span>${p.label}</span>${badgeHTML(p)}</a>`;
     UI.setHTML(
@@ -756,7 +758,7 @@ const App = (() => {
   const newItems = () => allowedActions().map((a) => ({ label: a.label, icon: a.icon, fn: () => a.run() }));
 
   const palette = () => {
-    const pageItems = visiblePages().filter((p) => p.nav !== false).map((p) => ({ group: 'Ir para', label: p.label, icon: p.icon, run: () => go(p.id), keys: p.label + ' ' + (p.keys || '') }));
+    const pageItems = visiblePages().filter(inNav).map((p) => ({ group: 'Ir para', label: p.label, icon: p.icon, run: () => go(p.id), keys: p.label + ' ' + (p.keys || '') }));
     const actionItems = Store.preview ? [] : allowedActions().map((a) => ({ group: 'Ações', label: a.label, icon: a.icon, run: a.run, keys: a.label + ' ' + (a.keys || '') }));
     const build = (q) => {
       const out = [];
