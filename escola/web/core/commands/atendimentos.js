@@ -12,23 +12,28 @@
   E.define('support.save', {
     perm: 'atendimentos.registrar',
     run(tx, input, ctx, env) {
-      const s = tx.need('students', input.studentId || (input.id && (tx.get('support', input.id) || {}).studentId), 'Aluno');
+      // edição: só o autor; o aluno é sempre o do registro guardado (não dá para "mudar" o aluno)
+      const cur = input.id ? tx.need('support', input.id, 'Registro') : null;
+      if (cur && cur.authorId !== ctx.user.id) fail('not_found', 'Registro não encontrado.');
+      const s = tx.need('students', cur ? cur.studentId : input.studentId, 'Aluno');
       ctx.needStudent(s);
-      const area = V.oneOf(input.area || ctx.user.area, 'Área', AREAS);
+      // na edição, campo ausente mantém o valor guardado (contrato §2)
+      const has = (k) => !cur || input[k] !== undefined;
+      const areaIn = has('area') ? input.area || ctx.user.area : cur.area;
+      if (!areaIn) fail('invalid', 'Escolha a área do atendimento.', 'area');
+      const area = V.oneOf(areaIn, 'Área', AREAS);
       const data = {
         area,
-        date: V.date(input.date || env.today, 'Data', { required: true }),
-        type: V.oneOf(input.type || 'atendimento', 'Tipo', TYPES),
-        confidentiality: V.oneOf(input.confidentiality || (area === 'psicologia' ? 'autor' : 'area'), 'Quem pode ler', ['autor', 'area', 'apoio']),
-        content: V.text(input.content, 'Registro', { required: true, max: 10000 }),
-        nextSteps: V.text(input.nextSteps, 'Próximos passos', { max: 3000 }),
+        date: has('date') ? V.date(input.date || env.today, 'Data', { required: true }) : cur.date,
+        type: has('type') ? V.oneOf(input.type || 'atendimento', 'Tipo', TYPES) : cur.type,
+        confidentiality: has('confidentiality') ? V.oneOf(input.confidentiality || (area === 'psicologia' ? 'autor' : 'area'), 'Quem pode ler', ['autor', 'area', 'apoio']) : cur.confidentiality,
+        content: has('content') ? V.text(input.content, 'Registro', { required: true, max: 10000 }) : cur.content,
+        nextSteps: has('nextSteps') ? V.text(input.nextSteps, 'Próximos passos', { max: 3000 }) : cur.nextSteps || '',
       };
-      if (data.date > env.today) fail('invalid', 'A data do atendimento não pode estar no futuro.');
-      if (input.id) {
-        const cur = tx.need('support', input.id, 'Registro');
-        if (cur.authorId !== ctx.user.id) fail('not_found', 'Registro não encontrado.');
+      if (data.date > env.today) fail('invalid', 'A data do atendimento não pode estar no futuro.', 'date');
+      if (cur) {
         // depois de 24 h, o texto original fica guardado: correção só por adendo
-        if (Date.parse(env.now) - Date.parse(cur.createdAt) > 24 * 3600 * 1000 && (data.content !== cur.content || data.nextSteps !== cur.nextSteps)) fail('conflict', 'Registros com mais de 24 horas não são reescritos. Acrescente um adendo.');
+        if (Date.parse(env.now) - Date.parse(cur.createdAt) > 24 * 3600 * 1000 && (data.content !== cur.content || data.nextSteps !== (cur.nextSteps || ''))) fail('conflict', 'Registros com mais de 24 horas não são reescritos. Acrescente um adendo.');
         tx.put('support', { ...cur, ...data, studentId: cur.studentId, updatedAt: env.now });
         tx.summary = 'Registro de atendimento atualizado';
         tx.audit = { entity: 'support', ids: [cur.id], confidential: true };
@@ -47,6 +52,7 @@
     run(tx, input, ctx, env) {
       const cur = tx.need('support', input.id, 'Registro');
       if (cur.authorId !== ctx.user.id) fail('not_found', 'Registro não encontrado.');
+      ctx.needStudent(tx.get('students', cur.studentId));
       const text = V.text(input.text, 'Adendo', { required: true, max: 3000 });
       tx.put('support', { ...cur, addenda: (cur.addenda || []).concat([{ by: ctx.user.id, at: env.now, text }]) });
       tx.summary = 'Adendo incluído em registro de atendimento';
@@ -62,16 +68,20 @@
       const s = tx.need('students', cur ? cur.studentId : input.studentId, 'Aluno');
       ctx.needStudent(s);
       if (cur && cur.authorId !== ctx.user.id && !ctx.can('atendimentos.conteudo')) fail('not_found', 'Plano não encontrado.');
-      const sw = input.sharedWith && typeof input.sharedWith === 'object' ? input.sharedWith : (cur && cur.sharedWith) || {};
+      // na edição, campo ausente mantém o valor guardado (contrato §2); sharedWith parcial completa com o atual
+      const has = (k) => !cur || input[k] !== undefined;
+      const sw = { ...((cur && cur.sharedWith) || {}), ...(input.sharedWith && typeof input.sharedWith === 'object' ? input.sharedWith : {}) };
       const data = {
-        title: V.str(input.title, 'Título', { required: true, max: 140 }),
+        title: has('title') ? V.str(input.title, 'Título', { required: true, max: 140 }) : cur.title,
         start: V.date(input.start || (cur && cur.start) || env.today, 'Início', { required: true }),
-        goals: V.text(input.goals, 'Metas', { max: 5000 }),
-        adaptations: V.text(input.adaptations, 'Adaptações e orientações para os professores', { max: 5000 }),
+        goals: has('goals') ? V.text(input.goals, 'Metas', { max: 5000 }) : cur.goals || '',
+        adaptations: has('adaptations') ? V.text(input.adaptations, 'Adaptações e orientações para os professores', { max: 5000 }) : cur.adaptations || '',
         sharedWith: { professores: V.bool(sw.professores), coordenacao: V.bool(sw.coordenacao), familia: V.bool(sw.familia) },
       };
       if (cur) {
-        const familyChanged = data.sharedWith.familia && (data.goals !== cur.goals || data.adaptations !== cur.adaptations || data.title !== cur.title);
+        // a família dá ciente de novo se o conteúdo mudou ou se o plano passou a ser compartilhado com ela agora
+        const newlyShared = data.sharedWith.familia && !(cur.sharedWith && cur.sharedWith.familia);
+        const familyChanged = newlyShared || (data.sharedWith.familia && (data.goals !== (cur.goals || '') || data.adaptations !== (cur.adaptations || '') || data.title !== cur.title));
         tx.put('plans', { ...cur, ...data, updatedAt: env.now, familyAckAt: familyChanged ? null : cur.familyAckAt || null });
         tx.summary = `Plano de acompanhamento de ${s.name} atualizado`;
         tx.audit = { entity: 'plans', ids: [cur.id], confidential: true };

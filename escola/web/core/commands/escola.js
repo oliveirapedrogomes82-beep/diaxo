@@ -11,69 +11,119 @@
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
   // ---------- configurações ----------
+  /** Anexa o nome do campo ao erro de validação (a tela marca o campo certo). */
+  const at = (field, fn) => {
+    try {
+      return fn();
+    } catch (e) {
+      if (e && e.code && !e.field) e.field = field;
+      throw e;
+    }
+  };
+  const TIMEZONES = ['America/Sao_Paulo', 'America/Manaus', 'America/Cuiaba', 'America/Porto_Velho', 'America/Rio_Branco', 'America/Belem', 'America/Fortaleza', 'America/Recife', 'America/Bahia', 'America/Noronha', 'America/Campo_Grande', 'America/Boa_Vista', 'America/Araguaina', 'America/Maceio'];
+  const TERM_LABEL = { 2: 'semestre', 3: 'trimestre', 4: 'bimestre' };
+  /** Chave estável de um campo da rotina (os registros guardam o valor por chave). */
+  const ROUTINE_KEY = /^[a-z][a-z0-9_]{1,29}$/;
+  const routineKey = (label) => {
+    let k = norm(label).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+    if (!/^[a-z]/.test(k)) k = ('campo_' + k).slice(0, 30);
+    return ROUTINE_KEY.test(k) ? k : 'campo';
+  };
+
   E.define('settings.update', {
     perm: 'configuracoes.editar',
-    run(tx, { patch = {} }) {
+    run(tx, input) {
+      const patch = input && input.patch && typeof input.patch === 'object' && !Array.isArray(input.patch) ? input.patch : {};
       const cur = tx.get('settings');
       const out = {};
-      if (has(patch, 'schoolName')) out.schoolName = V.str(patch.schoolName, 'Nome da escola', { required: true, max: 120 });
-      if (has(patch, 'cnpj')) out.cnpj = V.str(patch.cnpj, 'CNPJ', { max: 20 });
-      if (has(patch, 'phone')) out.phone = V.phone(patch.phone, 'Telefone da escola');
-      if (has(patch, 'address')) out.address = V.str(patch.address, 'Endereço da escola', { max: 200 });
-      if (has(patch, 'timezone')) out.timezone = V.oneOf(patch.timezone, 'Fuso horário', ['America/Sao_Paulo', 'America/Manaus', 'America/Cuiaba', 'America/Porto_Velho', 'America/Rio_Branco', 'America/Belem', 'America/Fortaleza', 'America/Recife', 'America/Bahia', 'America/Noronha', 'America/Campo_Grande', 'America/Boa_Vista', 'America/Araguaina', 'America/Maceio']);
+      const f = (key, fn) => {
+        if (has(patch, key)) out[key] = at(key, fn);
+      };
+      f('schoolName', () => V.str(patch.schoolName, 'Nome da escola', { required: true, max: 120 }));
+      f('cnpj', () => V.str(patch.cnpj, 'CNPJ', { max: 20 }));
+      f('phone', () => V.phone(patch.phone, 'Telefone da escola'));
+      f('address', () => V.str(patch.address, 'Endereço da escola', { max: 200 }));
+      f('timezone', () => V.oneOf(patch.timezone, 'Fuso horário', TIMEZONES));
       if (has(patch, 'termCount')) {
-        out.termCount = V.oneOf(Number(patch.termCount), 'Etapas', [2, 3, 4]);
-        out.termLabel = { 2: 'semestre', 3: 'trimestre', 4: 'bimestre' }[out.termCount];
+        const count = at('termCount', () => V.oneOf(Number(patch.termCount), 'Etapas', [2, 3, 4]));
+        out.termCount = count;
+        out.termLabel = TERM_LABEL[count];
+        // menos etapas: não deixa notas do ano corrente "sumirem" em etapas que deixariam de existir
+        if (count < (Number(cur.termCount) || 4)) {
+          const y = String(cur.year);
+          const orphan = tx.keys('grades').some((k) => {
+            const p = k.split('|');
+            if (p[0] !== y) return false;
+            const t = String(p[3]).replace(/^rec/, '');
+            return /^\d+$/.test(t) && Number(t) > count;
+          });
+          if (orphan) fail('invalid', `Já há notas lançadas depois do ${count}º ${TERM_LABEL[count]} em ${y}. Para dividir o ano em ${count} etapas, essas notas precisam ser apagadas antes.`, 'termCount');
+        }
+        if (!has(patch, 'term') && Number(cur.term) > count) out.term = count;
       }
-      if (has(patch, 'term')) out.term = V.int(patch.term, 'Etapa atual', { required: true, min: 1, max: out.termCount || cur.termCount || 4 });
-      if (has(patch, 'passing')) out.passing = V.num(patch.passing, 'Média para aprovação', { required: true, min: 0, max: 10 });
-      if (has(patch, 'recovery')) out.recovery = V.num(patch.recovery, 'Nota mínima para recuperação', { required: true, min: 0, max: 10 });
-      if (has(patch, 'chargesFees')) out.chargesFees = V.bool(patch.chargesFees);
-      if (has(patch, 'defaultFee')) out.defaultFee = V.num(patch.defaultFee, 'Mensalidade padrão', { min: 0, max: 100000 }) || 0;
-      if (has(patch, 'dueDay')) out.dueDay = V.int(patch.dueDay, 'Dia de vencimento', { required: true, min: 1, max: 28 });
-      if (has(patch, 'lateFine')) out.lateFine = V.num(patch.lateFine, 'Multa por atraso', { min: 0, max: 2 }) || 0;
-      if (has(patch, 'lateInterest')) out.lateInterest = V.num(patch.lateInterest, 'Juros ao mês', { min: 0, max: 10 }) || 0;
-      if (has(patch, 'pixKey')) out.pixKey = V.str(patch.pixKey, 'Chave Pix', { max: 120 });
-      if (has(patch, 'homeworkLabel')) out.homeworkLabel = V.oneOf(patch.homeworkLabel, 'Nome do dever', ['Dever de casa', 'Lição de casa', 'Tarefa', 'Para casa']);
-      if (has(patch, 'diaryApproval')) out.diaryApproval = V.bool(patch.diaryApproval);
-      if (has(patch, 'familyMessages')) out.familyMessages = V.bool(patch.familyMessages);
-      if (has(patch, 'officeHours')) out.officeHours = V.str(patch.officeHours, 'Horário de atendimento', { max: 200 });
-      if (has(patch, 'absenceAlert')) out.absenceAlert = V.int(patch.absenceAlert, 'Alerta de faltas seguidas', { min: 2, max: 30 });
+      f('term', () => V.int(patch.term, 'Etapa atual', { required: true, min: 1, max: out.termCount || cur.termCount || 4 }));
+      f('passing', () => V.num(patch.passing, 'Média para aprovação', { required: true, min: 0, max: 10 }));
+      f('recovery', () => V.num(patch.recovery, 'Nota mínima para recuperação', { required: true, min: 0, max: 10 }));
+      f('chargesFees', () => V.bool(patch.chargesFees));
+      f('defaultFee', () => V.num(patch.defaultFee, 'Mensalidade padrão', { min: 0, max: 100000 }) || 0);
+      f('dueDay', () => V.int(patch.dueDay, 'Dia de vencimento', { required: true, min: 1, max: 28 }));
+      f('lateFine', () => V.num(patch.lateFine, 'Multa por atraso', { min: 0, max: 2 }) || 0);
+      f('lateInterest', () => V.num(patch.lateInterest, 'Juros ao mês', { min: 0, max: 10 }) || 0);
+      f('pixKey', () => V.str(patch.pixKey, 'Chave Pix', { max: 120 }));
+      f('homeworkLabel', () => V.oneOf(patch.homeworkLabel, 'Nome do dever', ['Dever de casa', 'Lição de casa', 'Tarefa', 'Para casa']));
+      f('diaryApproval', () => V.bool(patch.diaryApproval));
+      f('familyMessages', () => V.bool(patch.familyMessages));
+      f('officeHours', () => V.str(patch.officeHours, 'Horário de atendimento', { max: 200 }));
+      f('absenceAlert', () => V.int(patch.absenceAlert, 'Alerta de faltas seguidas', { min: 2, max: 30 }));
       if (has(patch, 'segments')) {
         const seg = {};
+        const given = patch.segments && typeof patch.segments === 'object' ? patch.segments : {};
         for (const name of SEGMENTS) {
-          const v = (patch.segments || {})[name] || cur.segments[name] || rules.DEFAULT_SEGMENT;
+          const v = (has(given, name) && given[name]) || (cur.segments || {})[name] || rules.DEFAULT_SEGMENT;
+          const k = `segments.${name}.`;
           seg[name] = {
-            attendance: V.oneOf(v.attendance, `Chamada (${name})`, ['diaria', 'por_aula']),
-            minAttendance: V.int(v.minAttendance, `Frequência mínima (${name})`, { required: true, min: 0, max: 100 }),
-            evaluation: V.oneOf(v.evaluation, `Avaliação (${name})`, ['nota', 'parecer']),
+            attendance: at(k + 'attendance', () => V.oneOf(v.attendance, `Chamada (${name})`, ['diaria', 'por_aula'])),
+            minAttendance: at(k + 'minAttendance', () => V.int(v.minAttendance, `Frequência mínima (${name})`, { required: true, min: 0, max: 100 })),
+            evaluation: at(k + 'evaluation', () => V.oneOf(v.evaluation, `Avaliação (${name})`, ['nota', 'parecer'])),
           };
         }
         out.segments = seg;
       }
       if (has(patch, 'routineFields')) {
-        if (!Array.isArray(patch.routineFields) || patch.routineFields.length > 12) fail('invalid', 'Campos da rotina: lista inválida.');
-        out.routineFields = patch.routineFields.map((f, i) => ({
-          key: /^[a-z_]{2,30}$/.test(f.key || '') ? f.key : `campo_${i + 1}`,
-          label: V.str(f.label, 'Nome do campo', { required: true, max: 40 }),
-          options: V.strs(f.options, 'Opções', { max: 8, maxLen: 30 }),
-        }));
+        if (!Array.isArray(patch.routineFields) || patch.routineFields.length > 12) fail('invalid', 'Campos da rotina: use no máximo 12 campos.', 'routineFields');
+        const used = new Set();
+        out.routineFields = patch.routineFields.map((raw) => {
+          const fld = raw && typeof raw === 'object' ? raw : {};
+          const label = at('routineFields', () => V.str(fld.label, 'Nome do campo da rotina', { required: true, max: 40 }));
+          if (fld.options != null && (!Array.isArray(fld.options) || fld.options.length > 8)) fail('invalid', `O campo "${label}" pode ter no máximo 8 opções.`, 'routineFields');
+          const options = at('routineFields', () => V.strs(fld.options, `Opções de "${label}"`, { max: 8, maxLen: 30 }));
+          if (!options.length) fail('invalid', `O campo "${label}" precisa de pelo menos uma opção.`, 'routineFields');
+          // a chave guardada continua a mesma ao renomear ou reordenar (os registros antigos seguem ligados)
+          const base = typeof fld.key === 'string' && ROUTINE_KEY.test(fld.key) ? fld.key : routineKey(label);
+          let key = base;
+          for (let n = 2; used.has(key); n++) key = `${base.slice(0, 26)}_${n}`;
+          used.add(key);
+          return { key, label, options };
+        });
       }
-      if (has(patch, 'routineBring')) out.routineBring = V.strs(patch.routineBring, 'Itens para trazer', { max: 20, maxLen: 40 });
+      f('routineBring', () => {
+        if (patch.routineBring != null && (!Array.isArray(patch.routineBring) || patch.routineBring.length > 20)) fail('invalid', 'Itens para trazer: use no máximo 20 itens.');
+        return V.strs(patch.routineBring, 'Itens para trazer', { max: 20, maxLen: 40 });
+      });
       if (has(patch, 'privacy')) {
-        const p = patch.privacy || {};
+        const p = patch.privacy && typeof patch.privacy === 'object' ? patch.privacy : {};
         out.privacy = {
-          controller: V.str(p.controller, 'Controlador dos dados', { max: 160 }),
-          dpoName: V.str(p.dpoName, 'Encarregado de dados', { max: 120 }),
-          dpoContact: V.str(p.dpoContact, 'Contato do encarregado', { max: 160 }),
+          controller: at('privacy.controller', () => V.str(p.controller, 'Controlador dos dados', { max: 160 })),
+          dpoName: at('privacy.dpoName', () => V.str(p.dpoName, 'Encarregado de dados', { max: 120 })),
+          dpoContact: at('privacy.dpoContact', () => V.str(p.dpoContact, 'Contato do encarregado', { max: 160 })),
           noticeVersion: String((Number((cur.privacy || {}).noticeVersion) || 1) + (p.bumpVersion ? 1 : 0)),
         };
       }
       const next = { ...cur, ...out };
-      if (next.recovery > next.passing) fail('invalid', 'A nota de recuperação não pode ser maior que a média de aprovação.');
+      if (Number(next.recovery) > Number(next.passing)) fail('invalid', 'A nota de recuperação não pode ser maior que a média de aprovação.', has(patch, 'recovery') ? 'recovery' : 'passing');
       if (!Object.keys(out).length) return { id: 'school' };
       tx.settings(out);
-      tx.summary = 'Configurações da escola atualizadas';
+      tx.summary = out.privacy && (patch.privacy || {}).bumpVersion ? `Nova versão do aviso de privacidade publicada (versão ${out.privacy.noticeVersion})` : 'Configurações da escola atualizadas';
       tx.audit = { entity: 'settings', ids: ['school'] };
       return { id: 'school' };
     },
@@ -134,12 +184,12 @@
   E.define('subjects.save', {
     perm: 'configuracoes.editar',
     run(tx, input, ctx, env) {
-      const name = V.str(input.name, 'Nome da disciplina', { required: true, max: 60 });
-      const color = V.int(input.color, 'Cor', { min: 1, max: 8 }) || 1;
-      const weekly = V.int(input.weekly, 'Aulas por semana', { min: 0, max: 15 }) ?? 1;
-      const short = V.str(input.short, 'Abreviação', { max: 12 }) || (name.length > 9 ? name.slice(0, 5) + '.' : name);
+      const name = at('name', () => V.str(input.name, 'Nome da disciplina', { required: true, max: 60 }));
+      const color = at('color', () => V.int(input.color, 'Cor', { min: 1, max: 8 })) || 1;
+      const weekly = at('weekly', () => V.int(input.weekly, 'Aulas por semana', { min: 0, max: 15 })) ?? 1;
+      const short = at('short', () => V.str(input.short, 'Abreviação', { max: 12 })) || (name.length > 9 ? name.slice(0, 5) + '.' : name);
       const dup = tx.list('subjects').find((s) => norm(s.name) === norm(name) && s.id !== input.id);
-      if (dup) fail('conflict', `Já existe a disciplina ${dup.name}.`);
+      if (dup) fail('conflict', `Já existe a disciplina ${dup.name}.`, 'name');
       if (input.id) {
         const cur = tx.need('subjects', input.id, 'Disciplina');
         tx.put('subjects', { ...cur, name, short, color, weekly });
@@ -161,12 +211,16 @@
     run(tx, input) {
       const sub = tx.need('subjects', input.id, 'Disciplina');
       if (tx.keys('grades').some((k) => k.split('|')[2] === sub.id)) fail('conflict', `${sub.name} já tem notas lançadas. Ela pode ser retirada das turmas, mas não excluída.`);
+      // a chamada por aula guarda a disciplina de cada aula: sem ela o histórico de frequência perderia o nome
+      const att = tx.state.attendance;
+      if (Object.keys(att).some((k) => att[k] && att[k].subjectId === sub.id)) fail('conflict', `${sub.name} já tem aulas registradas na chamada. Ela pode ser retirada das turmas, mas não excluída.`);
       tx.del('subjects', sub.id);
       for (const c of tx.list('classes').slice()) {
-        if (!(sub.id in (c.subjects || {})) && !c.schedule.flat().includes(sub.id)) continue;
+        const schedule = Array.isArray(c.schedule) ? c.schedule : [];
+        if (!(sub.id in (c.subjects || {})) && !schedule.flat().includes(sub.id)) continue;
         const subjects = { ...c.subjects };
         delete subjects[sub.id];
-        tx.put('classes', { ...c, subjects, schedule: c.schedule.map((d) => d.map((x) => (x === sub.id ? '' : x))) });
+        tx.put('classes', { ...c, subjects, schedule: schedule.map((d) => (Array.isArray(d) ? d : []).map((x) => (x === sub.id ? '' : x))) });
       }
       for (const u of tx.list('users').slice()) if ((u.subjectIds || []).includes(sub.id)) tx.put('users', { ...u, subjectIds: u.subjectIds.filter((x) => x !== sub.id) });
       tx.summary = `Disciplina ${sub.name} excluída`;
@@ -332,10 +386,17 @@
   });
 
   // ---------- virada do ano letivo ----------
+  const RESULTS = ['aprovado', 'retido', 'transferido', 'concluido'];
+  const NEW_REF = /^new:\d{1,3}$/;
   /**
-   * year.rollover {mapping: {turmaAntiga: turmaNova|null}, results: {alunoId: aprovado|retido|transferido|concluido}}
-   * Grava o histórico de cada aluno, move os alunos, encerra as turmas antigas e abre o novo ano.
-   * As turmas novas precisam existir antes (criadas no ano novo pela tela de virada).
+   * year.rollover {nextYear, open, mapping, results} — só a titular, com senha.
+   *   open: [{ref: 'new:1', name, segment, shift, from?: turmaAntiga, people?: bool}] — turmas do novo ano, criadas aqui
+   *         na mesma transação. `from` copia sala, vagas, disciplinas e horário da turma antiga; com `people` copia também
+   *         regente, auxiliares, professores das disciplinas e os vínculos (classIds) de quem atuava nela.
+   *   mapping: {turmaAntiga: destino|null, 'turmaAntiga:retido': destino|null} — destino = ref de `open` ou id de uma
+   *         turma ativa do novo ano que já exista.
+   *   results: {alunoId: aprovado|retido|transferido|concluido} (padrão: aprovado).
+   * Grava o histórico de cada aluno (média e frequência do ano), move os alunos, encerra as turmas antigas e abre o novo ano.
    */
   E.define('year.rollover', {
     staff: true,
@@ -343,20 +404,74 @@
     run(tx, input, ctx, env) {
       const st = tx.get('settings');
       if (st.ownerId !== ctx.user.id) fail('forbidden', 'Só a conta titular pode fazer a virada do ano letivo.');
-      const year = st.year;
+      const year = Number(st.year);
       const nextYear = V.int(input.nextYear, 'Novo ano letivo', { required: true, min: year + 1, max: year + 1 });
-      const mapping = input.mapping && typeof input.mapping === 'object' ? input.mapping : {};
-      const results = input.results && typeof input.results === 'object' ? input.results : {};
+      const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+      const mapping = obj(input.mapping);
+      const results = obj(input.results);
+      const oldClasses = tx.list('classes').filter((c) => c.status !== 'encerrada' && Number(c.year) === year);
+      const oldIds = new Set(oldClasses.map((c) => c.id));
+
+      // ---- turmas do novo ano ----
+      const open = input.open == null ? [] : input.open;
+      if (!Array.isArray(open) || open.length > 200) fail('invalid', 'Lista de turmas novas inválida.');
+      const names = new Set(tx.list('classes').filter((c) => c.status !== 'encerrada' && !oldIds.has(c.id)).map((c) => norm(c.name)));
+      const refs = new Map();
+      const pool = [];
+      for (const sub of tx.list('subjects')) for (let k = 0; k < (sub.weekly || 0); k++) pool.push(sub.id);
+      for (const raw of open) {
+        const o = obj(raw);
+        const ref = String(o.ref || '');
+        if (!NEW_REF.test(ref) || refs.has(ref)) fail('invalid', 'Turma nova com referência inválida.');
+        const name = V.str(o.name, 'Nome da turma nova', { required: true, max: 60 });
+        if (names.has(norm(name))) fail('conflict', `Já existe uma turma "${name}" em ${nextYear}. Use outro nome.`);
+        names.add(norm(name));
+        const src = o.from ? oldClasses.find((c) => c.id === o.from) : null;
+        if (o.from && !src) fail('not_found', 'Turma de origem não encontrada.');
+        const segment = V.oneOf(o.segment || (src && src.segment) || 'Outro', `Etapa de ensino de ${name}`, SEGMENTS);
+        const shift = V.oneOf(o.shift || (src && src.shift) || 'Manhã', `Turno de ${name}`, SHIFTS);
+        const people = !!src && V.bool(o.people);
+        let subjects;
+        let schedule;
+        if (src) {
+          subjects = {};
+          for (const [sid, uid] of Object.entries(src.subjects || {})) subjects[sid] = people ? uid || null : null;
+          schedule = (Array.isArray(src.schedule) ? src.schedule : []).map((d) => (Array.isArray(d) ? d.slice() : []));
+        } else {
+          subjects = {};
+          for (const sub of tx.list('subjects')) subjects[sub.id] = null;
+          schedule = [0, 1, 2, 3, 4].map((di) => [0, 1, 2, 3, 4].map((pi) => pool[(pi * 5 + di) % Math.max(1, pool.length)] || ''));
+        }
+        const id = env.newId('c');
+        tx.put('classes', {
+          id, name, year: nextYear, status: 'ativa', segment, shift,
+          room: src ? src.room || '' : '', capacity: src ? Number(src.capacity) || 0 : 0,
+          teacherId: people ? src.teacherId || null : null,
+          assistantIds: people ? (src.assistantIds || []).slice() : [],
+          subjects, schedule,
+        });
+        if (people) for (const u of tx.list('users').slice()) if ((u.classIds || []).includes(src.id) && !u.classIds.includes(id)) tx.put('users', { ...u, classIds: u.classIds.concat([id]) });
+        refs.set(ref, id);
+      }
+      const target = (v, label) => {
+        if (!v) return null;
+        if (refs.has(v)) return tx.get('classes', refs.get(v));
+        const t = tx.need('classes', v, label);
+        if (Number(t.year) !== nextYear || t.status === 'encerrada') fail('invalid', `A turma de destino ${t.name} não é do ano ${nextYear}.`);
+        return t;
+      };
+
+      // ---- alunos ----
       const idx = rules.attendanceIndex(tx.state.attendance, { year });
-      const oldClasses = tx.list('classes').filter((c) => c.status !== 'encerrada' && c.year === year);
       let moved = 0;
+      const counts = { aprovado: 0, retido: 0, transferido: 0, concluido: 0 };
       for (const c of oldClasses) {
-        const target = mapping[c.id] ? tx.need('classes', mapping[c.id], 'Turma de destino') : null;
-        if (target && target.year !== nextYear) fail('invalid', `A turma de destino ${target.name} não é do ano ${nextYear}.`);
+        const promoted = target(mapping[c.id], 'Turma de destino');
+        const retained = target(mapping[c.id + ':retido'], 'Turma de destino');
+        const subjects = Object.keys(c.subjects || {});
         for (const s of tx.list('students').slice()) {
           if (s.classId !== c.id || s.status !== 'ativo') continue;
-          const result = V.oneOf(results[s.id] || 'aprovado', `Resultado de ${s.name}`, ['aprovado', 'retido', 'transferido', 'concluido']);
-          const subjects = Object.keys(c.subjects || {});
+          const result = V.oneOf(results[s.id] || 'aprovado', `Resultado de ${s.name}`, RESULTS);
           const avg = util.avg(subjects.map((sid) => rules.subjectFinal(tx.state.grades, st, year, s.id, sid)));
           const att = rules.rateOf(idx.get(s.id));
           const history = (s.history || []).concat([{ year, classId: c.id, className: c.name, result, avg: avg == null ? null : Math.round(avg * 10) / 10, attendance: att == null ? null : Math.round(att) }]);
@@ -364,22 +479,24 @@
           let status = s.status;
           if (result === 'transferido') status = 'transferido';
           else if (result === 'concluido') status = 'concluido';
-          else if (result === 'aprovado') classId = target ? target.id : '';
-          // retido: continua na mesma série — vai para a turma indicada em mapping[c.id + ':retido'] ou fica sem turma
-          else if (result === 'retido') classId = mapping[c.id + ':retido'] ? tx.need('classes', mapping[c.id + ':retido'], 'Turma de destino').id : '';
+          else if (result === 'aprovado') classId = promoted ? promoted.id : '';
+          else classId = retained ? retained.id : ''; // retido: continua na mesma série
           tx.put('students', { ...s, history, classId, status });
-          tx.set('councils', util.key.make(String(year), s.id), { result, by: ctx.user.id, at: env.now, released: true });
+          const key = util.key.make(String(year), s.id);
+          const prev = tx.get('councils', key) || {};
+          tx.set('councils', key, { ...prev, result, by: ctx.user.id, at: env.now, released: true });
+          counts[result]++;
           moved++;
         }
         tx.put('classes', { ...c, status: 'encerrada' });
       }
       const terms = { ...(st.terms || {}) };
       terms[nextYear] = {};
-      for (let t = 1; t <= (st.termCount || 4); t++) terms[nextYear][t] = { closed: false, released: false };
+      for (let t = 1; t <= (Number(st.termCount) || 4); t++) terms[nextYear][t] = { closed: false, released: false };
       tx.settings({ year: nextYear, term: 1, terms });
-      tx.summary = `Virada do ano letivo: ${year} → ${nextYear} (${moved} alunos)`;
+      tx.summary = `Virada do ano letivo: ${year} → ${nextYear} (${moved} alunos, ${oldClasses.length} turmas encerradas, ${refs.size} turmas abertas)`;
       tx.audit = { entity: 'settings', ids: ['school'] };
-      return { id: 'school', moved };
+      return { id: 'school', moved, ...counts, closed: oldClasses.length, created: [...refs.values()] };
     },
   });
 

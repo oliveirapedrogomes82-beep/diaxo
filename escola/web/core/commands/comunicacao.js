@@ -65,6 +65,8 @@
         const cur = tx.need('notices', input.id, 'Comunicado');
         ownOrAll(ctx, cur);
         if (input.baseUpdatedAt && cur.updatedAt !== input.baseUpdatedAt) fail('conflict', 'Este comunicado foi alterado enquanto você editava. Abra de novo para ver a versão atual.');
+        // edição: "fixado" ausente na entrada mantém o valor guardado (contrato: campos ausentes não mudam)
+        if (!Object.prototype.hasOwnProperty.call(input, 'pinned')) data.pinned = !!cur.pinned;
         tx.put('notices', { ...cur, ...data, updatedAt: env.now });
         tx.summary = `Comunicado "${data.title}" atualizado`;
         tx.audit = { entity: 'notices', ids: [cur.id] };

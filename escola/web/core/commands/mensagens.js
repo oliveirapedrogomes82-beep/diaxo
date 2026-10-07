@@ -67,6 +67,8 @@
       if (ctx.family && tx.get('settings').familyMessages === false) fail('forbidden', 'A escola não está recebendo mensagens pelo portal. Fale com a secretaria.');
       const body = V.text(input.body, 'Resposta', { required: true, max: 3000 });
       const kind = !ctx.family && input.kind === 'registro' ? 'registro' : 'texto';
+      // nota interna não leva anexo: o arquivo ficaria ligado à conversa, que a família enxerga
+      if (kind === 'registro' && Array.isArray(input.attachments) && input.attachments.length) fail('invalid', 'Notas internas não levam anexos. Para enviar um arquivo, responda à família.');
       const postId = env.newId('p');
       const attachments = X.attachFiles(tx, ctx, input.attachments, { coll: 'messages', id: m.id }, { max: 3 });
       const posts = (m.posts || []).concat([{ id: postId, kind, from: ctx.family ? 'familia' : 'escola', userId: ctx.user.id, body, at: env.now, attachments }]).slice(-200);

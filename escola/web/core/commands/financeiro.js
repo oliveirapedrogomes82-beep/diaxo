@@ -67,7 +67,8 @@
       const description = V.str(input.description, 'Descrição', { required: true, max: 120 });
       const amount = round2(V.num(input.amount, 'Valor', { required: true, min: 0.01, max: 1000000 }));
       const due = V.date(input.due, 'Vencimento', { required: true });
-      tx.put('invoices', { ...cur, description, amount, due });
+      // cobrança avulsa pertence ao mês do vencimento; mensalidade mantém o mês de competência
+      tx.put('invoices', { ...cur, description, amount, due, month: cur.kind === 'avulsa' ? due.slice(0, 7) : cur.month });
       tx.summary = `Cobrança atualizada: ${description} (${money(amount)})`;
       tx.audit = { entity: 'invoices', ids: [cur.id] };
       return { id: cur.id };
@@ -98,7 +99,7 @@
       if (cur.paidAt) fail('conflict', 'Esta cobrança já está paga.');
       const paidAmount = round2(V.num(input.amount, 'Valor recebido', { required: true, min: 0.01, max: 1000000 }));
       const paidAt = V.date(input.paidAt, 'Data do pagamento', { required: true });
-      if (paidAt > env.today) fail('invalid', 'A data do pagamento não pode estar no futuro.');
+      if (paidAt > env.today) fail('invalid', 'A data do pagamento não pode estar no futuro.', 'paidAt');
       const method = V.oneOf(input.method, 'Forma de pagamento', METHODS);
       tx.put('invoices', { ...cur, paidAt, method, paidAmount, receivedBy: ctx.user.id });
       tx.summary = `Pagamento recebido de ${s.name}: ${cur.description}, ${money(paidAmount)} (${method})`;
