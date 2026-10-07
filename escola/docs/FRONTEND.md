@@ -104,7 +104,13 @@ do campo. Por isso:
   `agenda-pendente` (família), `alertas-saude`, `aniversariantes`, `chamadas-pendentes`, `faltas-seguidas`,
   `notas-pendentes`, `equipe-acessos`, `mensagens-abertas`, `mensagens-familia` (família), `atendimentos-recentes`,
   `apoio-familia` (família: plano de apoio com "Li e estou ciente"), `proximos-eventos` e `comunicados-fixados`
-  (equipe e família), `financeiro-mes`.
+  (equipe e família), `financeiro-mes`, `primeiros-passos` (titular, escola vazia). O host é
+  `PainelKit.widgetGrid(defs, {cls, merge})` + `PainelKit.mountWidgets(el)` (painel da equipe e início da família).
+- Rotas profundas: `#configuracoes/<seção>` (escola, ano, etapas, disciplinas, agenda, financeiro, privacidade,
+  acessos, virada, backup), `#relatorios/<relatório>`, `#boletim/<filho>`, `#filhos/<filho>`, `#mensagens/<id>`,
+  `#equipe/<id>`, `#equipe/perfis`, `#turmas/<id>`.
+- "Ver como" vale para contas de equipe que a pessoa domina e para contas de família dos alunos que ela alcança, se
+  tiver `familias.acessos` (`Core.perms.canPreview`); use `App.previewAs(userId)`.
 - **Ações compartilhadas já existentes** (chame com guarda `typeof Actions.x === 'function'`):
   `Actions.matricular({classId})`, `verAluno(id, aba?)`, `editarAluno(id)`, `convidarResponsavel(studentId, guardianId)`,
   `situacaoMatricula(id)`, `trocarTurma(id)`, `excluirAluno(id)`, `convidarFamilias(classId)`,

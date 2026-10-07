@@ -273,6 +273,21 @@
     return true;
   };
 
+  /**
+   * "Ver como" (somente leitura): conta de equipe que o ator domina, ou conta de família cujos filhos o ator alcança
+   * e cujos acessos ao portal ele gerencia (familias.acessos). Nunca a si mesmo.
+   */
+  const canPreview = (actor, target, state) => {
+    if (!actor || !target || actor.id === target.id) return false;
+    if (!isFamily(target)) return dominates(actor, target, state);
+    if (!effective(actor, (state && state.settings) || {}).has('familias.acessos')) return false;
+    const kids = guardianOf(target, state);
+    if (!kids.size) return false;
+    const ctx = context(actor, state);
+    for (const id of kids) if (!reachesStudent(ctx, (state.students || []).find((s) => s.id === id))) return false;
+    return true;
+  };
+
   /** Diferença entre as permissões efetivas e o perfil do cargo (para mostrar "padrão" e "alterado"). */
   const diffFromProfile = (roleId, perms, settings) => {
     const base = new Set(profile(roleId, settings));
@@ -299,6 +314,6 @@
   return {
     CATALOG, ALL, SENSITIVE, CONFIDENTIAL, IMPLIES, ROLES, ROLE, STAFF_ROLES, roleLabel, isFamily, clean, withImplied,
     profile, isActive, effective, activeClass, linkedClassIds, guardianOf, context, fingerprint, reachesStudent, reachesClass, pedagogicLink, canGradeSubject,
-    scopeRank, scopeWithin, dominates, diffFromProfile, toGrantsRevokes, groups, label,
+    scopeRank, scopeWithin, dominates, canPreview, diffFromProfile, toGrantsRevokes, groups, label,
   };
 });

@@ -629,7 +629,7 @@ const Api = (() => {
       async preview(userId) {
         const u = needUser();
         const target = user(userId);
-        if (!target || !Perms.dominates(u, target, state)) fail('not_found', 'Pessoa não encontrada.', 404);
+        if (!target || Perms.isFamily(u) || !Perms.canPreview(u, target, state)) fail('not_found', 'Pessoa não encontrada.', 404);
         addAudit(u, 'preview', `Visualizou o sistema como ${target.name}`, { entity: 'users', ids: [target.id] });
         const snap = View.snapshot(state, target, env());
         return clone({ rev, me: snap.me, data: snap.data, reads: {}, preview: true });

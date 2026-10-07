@@ -517,7 +517,7 @@ class Api {
   getPreview(req, res, userId) {
     const s = this.needSession(req);
     const target = this.user(userId);
-    if (!target || !Perms.dominates(s.user, target, this.state)) throw new HttpError(404, 'not_found', 'Pessoa não encontrada.');
+    if (!target || Perms.isFamily(s.user) || !Perms.canPreview(s.user, target, this.state)) throw new HttpError(404, 'not_found', 'Pessoa não encontrada.');
     this.audit(s, 'preview', `Visualizou o sistema como ${target.name}`, { entity: 'users', ids: [target.id] }, req);
     const snap = View.snapshot(this.state, target, this.env());
     return sendJSON(req, res, 200, { rev: this.db.rev, me: snap.me, data: snap.data, reads: {}, preview: true });

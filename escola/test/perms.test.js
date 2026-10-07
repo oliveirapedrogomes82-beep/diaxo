@@ -126,3 +126,17 @@ test('impressão digital muda quando o acesso muda', () => {
   s.classId = c0.id;
   assert.notEqual(perms.fingerprint(prof, st), b, 'aluno que entra na turma muda o que o professor vê');
 });
+
+test('ver como: equipe dominada ou família dos alunos que o ator alcança', () => {
+  const st = fresh();
+  const dir = who(st, 'Ana Beatriz');
+  const sec = who(st, 'Rita');
+  const prof = who(st, 'Marcos');
+  const fam = family(st);
+  assert.ok(perms.canPreview(dir, prof, st));
+  assert.ok(!perms.canPreview(prof, dir, st));
+  assert.ok(!perms.canPreview(dir, dir, st));
+  assert.ok(perms.canPreview(sec, fam, st), 'secretaria gerencia acessos das famílias');
+  assert.ok(!perms.canPreview(prof, fam, st), 'professor não tem familias.acessos');
+  assert.ok(!perms.canPreview(who(st, 'Paulo'), fam, st));
+});
