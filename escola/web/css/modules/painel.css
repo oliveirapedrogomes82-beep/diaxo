@@ -55,13 +55,16 @@
 
 /* turmas */
 .pn-classes { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+/* uma turma só ocupa a largura toda (sem buraco ao lado) */
+.pn-classes.n1 { grid-template-columns: minmax(0, 1fr); }
+.pn-classes.n1 .pn-class-btns .btn.primary { flex-basis: auto; }
 .pn-class { padding: 16px 16px 14px; display: grid; gap: 12px; align-content: start; }
 .pn-class-top { display: flex; align-items: flex-start; gap: 12px; }
 .pn-class-top .grow { flex: 1; min-width: 0; }
 .pn-class-top h3 { font-size: 1.1rem; }
 .pn-class-top h3 a { color: var(--fg); text-decoration: none; }
 .pn-class-top h3 a:hover { color: var(--accent-text); text-decoration: underline; }
-.pn-class-top p { margin-top: 2px; }
+.pn-class-top p { margin-top: 2px; text-wrap: pretty; }
 .pn-class-mark {
   --c: var(--cat-1);
   width: 40px; height: 40px; border-radius: 11px; flex: none; display: grid; place-items: center;
@@ -122,6 +125,9 @@
 .pn-w { min-width: 0; display: grid; }
 .pn-w > * { min-width: 0; }
 .pn-w > .card { margin: 0; }
+/* o host nunca deixa o conteúdo de um quadro estourar a largura (itens de lista em grade/flex podem encolher) */
+.pn-w :is(ul, ol) > li { min-width: 0; }
+.pn-w .card-body { min-width: 0; overflow-wrap: anywhere; }
 /* cabeçalho dos widgets com ícone, no mesmo padrão */
 .pn-w .card-head h2 { display: flex; align-items: center; gap: 8px; }
 .pn-w .card-head h2 > .i { color: var(--fg-3); }

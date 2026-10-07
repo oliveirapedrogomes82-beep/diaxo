@@ -19,7 +19,7 @@
    * full ocupa a linha; halves e thirds seguidos formam um grupo em colunas (2 ou 3) que o mount equilibra
    * pela altura (sem buracos). No celular tudo vira uma coluna, na ordem original.
    */
-  const widgetGrid = (defs = App.widgets(), { cls = '' } = {}) => {
+  const widgetGrid = (defs = App.widgets(), { cls = '', merge = false } = {}) => {
     const items = [];
     for (const w of defs) {
       let out;
@@ -30,7 +30,9 @@
         continue;
       }
       if (isBlank(out)) continue;
-      items.push({ w, out, size: COLS[w.size] || w.size === 'full' ? w.size : 'half' });
+      // merge: metades e terços viram uma grade só de duas colunas (telas com poucos quadros, como o Portal da família)
+      const size = w.size === 'full' ? 'full' : merge || !COLS[w.size] ? 'half' : w.size;
+      items.push({ w, out, size });
     }
     if (!items.length) return '';
     const segs = [];
@@ -143,11 +145,19 @@
     const T = today();
     const out = [];
     const classes = Q.classes();
+    // quem registra atendimentos vê primeiro o próprio trabalho
+    if (can('atendimentos.registrar') && vis.has('atendimentos')) {
+      const month = T.slice(0, 7);
+      const n = Store.state.support.filter((r) => r.authorId === me().id && (r.date || '').slice(0, 7) === month).length;
+      const plans = Store.state.plans.filter((p) => p.status === 'ativo').length;
+      out.push({ href: '#atendimentos', icon: 'heart', label: `Seus atendimentos em ${U.monthName(month)}`, value: U.int(n), foot: U.plural(plans, 'plano de apoio ativo', 'planos de apoio ativos') });
+    }
     if (can('alunos.ver') && vis.has('alunos')) {
       const n = Q.students().length;
       out.push({ href: '#alunos', icon: 'users', label: 'Alunos ativos', value: U.int(n), foot: classes.length ? U.plural(classes.length, 'turma ativa', 'turmas ativas') : 'Nenhuma turma ativa' });
     }
-    if (can('chamada.ver') && vis.has('chamada') && classes.length) {
+    // a situação das chamadas interessa a quem registra, justifica ou coordena
+    if (can('chamada.ver') && Store.canAny('chamada.registrar', 'chamada.justificar', 'turmas.gerenciar') && vis.has('chamada') && classes.length) {
       const off = dayOff(T);
       if (off) out.push({ href: '#chamada', icon: 'checkSquare', label: 'Chamada de hoje', value: '—', foot: off.title });
       else {
@@ -187,12 +197,6 @@
         const n = groupCount(pend);
         out.push({ href: '#agenda', icon: 'shieldCheck', label: 'Aprovações da agenda', value: U.int(n), foot: n ? 'Aguardando você' : 'Nada pendente', tone: n ? 'warn' : 'ok', approvals: n > 0 });
       }
-    }
-    if (can('atendimentos.registrar') && vis.has('atendimentos')) {
-      const month = T.slice(0, 7);
-      const n = Store.state.support.filter((r) => r.authorId === me().id && (r.date || '').slice(0, 7) === month).length;
-      const plans = Store.state.plans.filter((p) => p.status === 'ativo').length;
-      out.push({ href: '#atendimentos', icon: 'heart', label: `Seus atendimentos em ${U.monthName(month)}`, value: U.int(n), foot: U.plural(plans, 'plano de apoio ativo', 'planos de apoio ativos') });
     }
     if (can('diario.ver') && vis.has('agenda')) {
       const n = groupCount(Store.state.diary.filter((d) => d.status === 'publicado' && d.date === T));
@@ -283,7 +287,7 @@
     const total = U.sum(list.map((c) => Q.roster(c.id).length));
     return html`<section class="pn-section" aria-labelledby="pn-classes-h">
       <div class="pn-section-h"><h2 id="pn-classes-h">${icon('layers')}Minhas turmas</h2><span class="sub">${U.plural(list.length, 'turma', 'turmas')} · ${U.plural(total, 'aluno', 'alunos')}</span>${vis.has('turmas') ? html`<a class="btn ghost sm pn-section-link" href="#turmas">Ver turmas${icon('arrowRight')}</a>` : ''}</div>
-      <div class="pn-classes">${list.map((c) => classCard(c, vis))}</div>
+      <div class="pn-classes n${Math.min(list.length, 2)}">${list.map((c) => classCard(c, vis))}</div>
     </section>`;
   };
   const noClassesBlock = () => html`<section class="card pn-noclass">${UI.empty({
@@ -340,12 +344,27 @@
   // =====================================================================
   // Saudação e resumo
   // =====================================================================
+  /** Número do selo de uma tela visível (a própria tela sabe o que está pendente). */
+  const pageBadge = (id) => {
+    const p = App.pages().find((x) => x.id === id);
+    if (!p || !p.badge) return 0;
+    try {
+      const b = p.badge();
+      return b ? (typeof b === 'number' ? b : Number(b.n) || 0) : 0;
+    } catch (e) {
+      return 0;
+    }
+  };
   const summaryLine = (vis) => {
     const parts = [];
     const T = today();
     if (vis.has('chamada') && can('chamada.registrar') && Q.isSchoolDay(T)) {
       const n = Q.pendingRolls(T).length;
       if (n) parts.push(n === 1 ? '1 turma ainda sem chamada hoje' : `${n} turmas ainda sem chamada hoje`);
+    }
+    if (vis.has('rotina')) {
+      const n = pageBadge('rotina');
+      if (n) parts.push(n === 1 ? 'a rotina de hoje para enviar às famílias' : `a rotina de hoje para enviar em ${n} turmas`);
     }
     if (vis.has('mensagens') && can('mensagens.responder')) {
       const n = Q.openMessages().length;
@@ -355,9 +374,14 @@
       const n = groupCount(Q.pendingApprovals());
       if (n) parts.push(U.plural(n, 'envio da agenda para aprovar', 'envios da agenda para aprovar'));
     }
-    if (!parts.length) return 'Tudo em dia por aqui.';
+    let money = '';
+    if (vis.has('financeiro') && Store.canAny('financeiro.receber', 'financeiro.gerenciar') && Q.chargesFees()) {
+      const n = new Set(Store.state.invoices.filter((i) => !i.paidAt && i.due < T).map((i) => i.studentId)).size;
+      if (n) money = `${U.plural(n, 'aluno está', 'alunos estão')} com mensalidade em atraso.`;
+    }
+    if (!parts.length) return money || 'Tudo em dia por aqui.';
     const last = parts.pop();
-    return `Você tem ${parts.length ? `${parts.join(', ')} e ${last}` : last}.`;
+    return `Você tem ${parts.length ? `${parts.join(', ')} e ${last}` : last}.${money ? ` ${money}` : ''}`;
   };
   const head = (vis) => {
     const m = me();
