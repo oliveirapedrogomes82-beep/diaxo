@@ -281,7 +281,7 @@
     return {
       id: u.id, name: u.name || '', title: u.title || '', email: u.email || '', phone: u.phone || '', role: u.role,
       sel: effectiveOf(u), scope: u.scope || 'vinculos', segments: (u.segments || []).slice(), links, origLinks: JSON.parse(JSON.stringify(links)),
-      students: (u.linkedStudentIds || []).slice(), subjectIds: (u.subjectIds || []).slice(), area: u.area || '', login: !!u.login, validUntil: u.validUntil || '', sendInvite: false, note: '',
+      students: (u.linkedStudentIds || []).slice(), subjectIds: (u.subjectIds || []).slice(), area: u.area || '', login: !!u.login, validUntil: u.validUntil || '', sendInvite: false, note: '', roleNote: '', orig: u.role,
     };
   };
   const roleLinksOf = (links) =>
@@ -342,6 +342,7 @@
         <p class="eq-sums" data-sums>${permSummary(d.sel, base)}</p></div>
         <button type="button" class="btn sm" data-reset-perms ${sameSet(d.sel, def) ? raw('disabled') : ''}>${icon('undo')}Voltar ao padrão do cargo</button>
       </div>
+      ${d.roleNote ? html`<div class="notice warn eq-role-note">${icon('swap')}<span class="grow">${d.roleNote}</span></div>` : ''}
       ${permEditor({ sel: d.sel, base, mode: 'user', note: d.note })}`;
   };
 
@@ -401,7 +402,7 @@
         <p class="small muted">${d.scope === 'vinculos' ? 'Ela verá só estas turmas (e os alunos vinculados abaixo).' : 'Opcional: marque se a pessoa também dá aula, é regente ou auxiliar de alguma turma.'}${link ? '' : ' Para definir regente, professor ou auxiliar é preciso poder gerenciar turmas e ver todas elas.'}</p>
         ${classes.length ? html`<ul class="eq-classes">${classes.map((c) => classRow(d, c, link))}</ul>` : html`<p class="small muted">Nenhuma turma ativa ainda. Crie as turmas e volte aqui para vincular.</p>`}
       </section>
-      ${roleDef.teaches
+      ${roleDef.teaches && d.role !== 'auxiliar'
         ? html`<section class="eq-sec"><div class="field" data-field="subjectIds"><span class="label">Disciplinas que leciona</span><span class="hint">Ajuda a sugerir professores ao montar as turmas.</span><div class="chips" role="group" aria-label="Disciplinas que leciona">${S().subjects.map((s) => html`<label class="chip"><input type="checkbox" data-subject value="${s.id}" ${d.subjectIds.includes(s.id) ? raw('checked') : ''}><span class="swatch c${s.color || 1}"></span>${s.name}</label>`)}</div></div></section>`
         : ''}
       ${d.scope !== 'todas'
@@ -451,7 +452,7 @@
         ${UI.kv([['Nome', d.name], ['Aparece como', d.title || roleLabel(d.role)], ['E-mail', d.email], ['Celular', d.phone]])}</section>
       <section class="eq-rev-sec"><div class="eq-rev-head"><h3>Cargo e acessos</h3>${edit(2)}</div>
         ${UI.kv([
-          ['Cargo', roleLabel(d.role)],
+          ['Cargo', d.roleNote ? html`${roleLabel(d.role)} <span class="eq-tag off">antes: ${roleLabel(d.orig)}</span>` : roleLabel(d.role)],
           ['Acessos', html`${d.sel.size} permissões · ${c.std} do padrão${c.extra ? `, ${c.extra} extra${c.extra > 1 ? 's' : ''}` : ''}${c.off ? `, ${c.off} retirada${c.off > 1 ? 's' : ''}` : ''}`],
           extras.length ? ['Extras', html`<span class="eq-taglist">${extras.map((p) => html`<span class="eq-tag extra">${shortPerm(p)}</span>`)}</span>`] : null,
           offs.length ? ['Retirados', html`<span class="eq-taglist">${offs.map((p) => html`<span class="eq-tag off">${shortPerm(p)}</span>`)}</span>`] : null,
@@ -661,16 +662,14 @@
       if (linkErr) UI.toast(`A conta de ${first} foi salva, mas as turmas não: ${linkErr.message}`, { tone: 'bad', ms: 9000 });
       else UI.toast(isNew ? `Conta de ${first} criada` : `Alterações de ${first} salvas`);
       const inv = (res.effects || []).find((e) => e.type === 'invite');
-      if (inv) {
-        refreshMeta();
-        UI.showInvite(inv, { name: d.name, phone: d.phone, email: d.email });
-      }
+      if (isNew || inv) refreshMeta();
+      if (inv) UI.showInvite(inv, { name: d.name, phone: d.phone, email: d.email });
       if (isNew) App.go('equipe/' + uid);
     };
 
     api = UI.modal({
       title: isNew ? 'Nova conta da equipe' : `Editar acesso de ${U.shortName(cur.name)}`,
-      sub: isNew ? 'Crie o acesso por cargo e ajuste o que a pessoa pode ver e fazer.' : `${titleOf(cur)} · as mudanças valem a partir do próximo acesso.`,
+      sub: isNew ? 'Crie o acesso por cargo e ajuste o que a pessoa pode ver e fazer.' : `${titleOf(cur)} · mudanças nos acessos valem na hora.`,
       size: 'lg',
       cls: 'eq-wizard',
       top: html`<div data-steps></div>`,
@@ -725,7 +724,7 @@
               d.sel = defaultSel(d.role);
               if (isNew || !scopeOptions().some((o) => o[0] === d.scope)) d.scope = defaultScope(d.role);
               d.area = (P.ROLE[d.role] || {}).area || (isNew ? '' : d.area);
-              d.note = isNew ? '' : 'Os acessos foram trocados pelo padrão do novo cargo. Confira antes de salvar.';
+              d.roleNote = isNew || d.role === cur.role ? '' : `O cargo mudou de ${roleLabel(cur.role)} para ${roleLabel(d.role)}: os acessos voltaram ao padrão do novo cargo. Confira antes de salvar.`;
             }
             return;
           }

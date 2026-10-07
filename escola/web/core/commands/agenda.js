@@ -16,6 +16,24 @@
   };
   /** Quem pode editar/cancelar: o autor, ou quem aprova, ou escopo "todas" com diario.publicar. */
   const canManage = (ctx, item) => item.authorId === ctx.user.id || ctx.can('diario.aprovar') || (ctx.all && ctx.can('diario.publicar'));
+  /**
+   * Anexos na edição: além das regras gerais (X.attachFiles), aceita um arquivo que já está num item do mesmo envio
+   * (mesmo groupId) — o envio para várias turmas ou alunos é editado item a item e compartilha os anexos.
+   */
+  const attachGroupFiles = (tx, ctx, ids, cur) => {
+    const list = V.ids(ids, 'Anexos', { max: 5 });
+    const rest = [];
+    for (const id of list) {
+      const f = tx.get('files', id);
+      const refs = (f && f.refs) || [];
+      const mine = refs.some((r) => r.coll === 'diary' && r.id === cur.id);
+      const sibling = !mine && refs.length > 0 && refs.every((r) => r.coll === 'diary' && (tx.get('diary', r.id) || {}).groupId === cur.groupId);
+      if (f && sibling) tx.put('files', { ...f, refs: refs.concat([{ coll: 'diary', id: cur.id }]) });
+      else rest.push(id);
+    }
+    const kept = X.attachFiles(tx, ctx, rest, { coll: 'diary', id: cur.id });
+    return list.filter((id) => kept.includes(id) || !rest.includes(id));
+  };
 
   /**
    * diary.save {id?, type, classIds[] (ou classId), studentIds[] (alunos escolhidos), category, subjectId, title, body,
@@ -23,17 +41,22 @@
    * Novo: um item por turma; com alunos escolhidos, um item por aluno (mesmo groupId). Devolve {ids}.
    */
   E.define('diary.save', {
-    perm: 'diario.publicar',
+    // monitor/inspetor registra ocorrências sem mandar deveres e recados: basta diario.ocorrencias para o tipo "ocorrencia"
+    anyPerm: ['diario.publicar', 'diario.ocorrencias'],
     run(tx, input, ctx, env) {
       const st = tx.get('settings');
-      const type = V.oneOf(input.type, 'Tipo', TYPES);
+      // na edição o tipo é o do item guardado (não muda: evita, por ex., tirar uma ocorrência interna do sigilo trocando o tipo)
+      const existing = input.id ? tx.need('diary', input.id, 'Item da agenda') : null;
+      const type = existing ? existing.type : V.oneOf(input.type, 'Tipo', TYPES);
       if (type === 'ocorrencia') ctx.need('diario.ocorrencias');
+      else ctx.need('diario.publicar');
       if (type === 'autorizacao') ctx.need('diario.autorizacoes');
       const title = V.str(input.title, 'Título', { required: true, max: 140 });
       const body = V.text(input.body, 'Texto', { required: type !== 'lembrete', max: 5000 });
       const date = V.date(input.date || env.today, 'Data', { required: true });
       const due = V.date(input.due, type === 'dever' ? 'Entrega' : 'Data do lembrete');
       const respondBy = type === 'autorizacao' ? V.date(input.respondBy, 'Responder até', { required: true }) : null;
+      if (respondBy && !existing && respondBy < env.today) fail('invalid', 'O prazo para responder já passou. Escolha uma data a partir de hoje.', 'respondBy');
       const category = type === 'ocorrencia' ? V.oneOf(input.category || 'comportamento', 'Categoria', CATEGORIES) : null;
       const internal = type === 'ocorrencia' ? V.bool(input.internal) : false;
       const requireAck = type === 'autorizacao' || (type === 'ocorrencia' && !internal) ? true : V.bool(input.requireAck);
@@ -48,15 +71,15 @@
       const status = draft ? 'rascunho' : needsApproval ? 'pendente' : publishAt ? 'agendado' : 'publicado';
 
       // ----- edição -----
-      if (input.id) {
-        const cur = tx.need('diary', input.id, 'Item da agenda');
+      if (existing) {
+        const cur = existing;
         ctx.needClass(cur.classId, 'Item da agenda');
         if (!canManage(ctx, cur)) fail('forbidden', 'Só quem publicou (ou a coordenação) pode editar este item.');
         if (cur.status === 'cancelado') fail('conflict', 'Este item foi cancelado.');
         const answered = hasAnswers(tx, cur.id);
         if (cur.type === 'autorizacao' && answered) fail('conflict', 'Esta autorização já tem respostas. Cancele e envie uma nova.');
         const subjectId = input.subjectId && input.subjectId in (tx.get('classes', cur.classId) || {}).subjects ? input.subjectId : cur.subjectId;
-        const attachments = X.attachFiles(tx, ctx, input.attachments ?? cur.attachments, { coll: 'diary', id: cur.id });
+        const attachments = attachGroupFiles(tx, ctx, input.attachments ?? cur.attachments, cur);
         X.releaseFiles(tx, cur.attachments, attachments, { coll: 'diary', id: cur.id });
         if (input.baseUpdatedAt && cur.updatedAt !== input.baseUpdatedAt) {
           const who = tx.get('users', cur.authorId);
@@ -66,9 +89,18 @@
         if (cur.status === 'rascunho' || cur.status === 'pendente' || cur.status === 'agendado') {
           next.status = status;
           next.publishAt = publishAt;
+          // quem aprova e edita um item pendente já o aprova ao enviar
+          if (cur.status === 'pendente' && (status === 'publicado' || status === 'agendado')) next.approvedBy = ctx.user.id;
+          // devolvido pela coordenação e reenviado: o motivo da devolução deixa de valer
+          if (status !== 'rascunho') {
+            delete next.returnedBy;
+            delete next.returnedAt;
+            delete next.cancelReason;
+          }
         }
         if (answered || cur.status === 'publicado') next.editedAt = env.now;
         tx.put('diary', next);
+        if (next.status === 'publicado' && cur.status !== 'publicado') tx.effect({ type: 'notify', coll: 'diary', ids: [cur.id] });
         tx.summary = `${LABEL[type]} "${title}" editado(a)`;
         tx.audit = { entity: 'diary', ids: [cur.id] };
         return { id: cur.id, ids: [cur.id] };
@@ -122,24 +154,36 @@
 
   /** diary.cancel {id, reason, group?} — cancela (não apaga); com group, todo o envio. */
   E.define('diary.cancel', {
-    perm: 'diario.publicar',
+    anyPerm: ['diario.publicar', 'diario.ocorrencias'],
     undoable: true,
     run(tx, input, ctx, env) {
       const cur = tx.need('diary', input.id, 'Item da agenda');
       ctx.needClass(cur.classId, 'Item da agenda');
+      ctx.need(cur.type === 'ocorrencia' ? 'diario.ocorrencias' : 'diario.publicar');
       if (!canManage(ctx, cur)) fail('forbidden', 'Só quem publicou (ou a coordenação) pode cancelar este item.');
       const reason = V.str(input.reason, 'Motivo do cancelamento', { max: 200 });
+      if (cur.status === 'cancelado' && !V.bool(input.group)) fail('conflict', 'Este item já foi cancelado.');
       const items = V.bool(input.group) ? tx.list('diary').filter((d) => d.groupId === cur.groupId && d.status !== 'cancelado') : [cur];
       const ids = [];
+      let returned = 0;
       for (const it of items.slice()) {
         if (!perms.reachesClass(ctx, it.classId) || !canManage(ctx, it)) continue;
-        if (it.status === 'rascunho' && !hasAnswers(tx, it.id)) {
+        // nunca publicado (rascunho, aguardando aprovação, agendado): não pode chegar à família como "cancelado".
+        // Quem escreveu: apaga (dá para desfazer). Outra pessoa (coordenação): devolve como rascunho do autor, com o motivo.
+        const neverPublished = (it.status === 'rascunho' || it.status === 'pendente' || it.status === 'agendado') && !hasAnswers(tx, it.id);
+        if (neverPublished && it.authorId !== ctx.user.id) {
+          tx.put('diary', { ...it, status: 'rascunho', publishAt: null, cancelReason: reason, returnedBy: ctx.user.id, returnedAt: env.now, updatedAt: env.now });
+          returned++;
+        } else if (neverPublished) {
           tx.del('diary', it.id);
           X.releaseFiles(tx, it.attachments, [], { coll: 'diary', id: it.id });
         } else tx.put('diary', { ...it, status: 'cancelado', canceledAt: env.now, cancelReason: reason, updatedAt: env.now });
         ids.push(it.id);
       }
-      tx.summary = `${LABEL[cur.type]} "${cur.title}" cancelado(a)${ids.length > 1 ? ` em ${ids.length} turmas` : ''}${reason ? `: ${reason}` : ''}`;
+      if (!ids.length) fail('conflict', 'Nada para cancelar: este envio já foi cancelado.');
+      tx.summary = returned
+        ? `${LABEL[cur.type]} "${cur.title}" devolvido(a) para ajustes${reason ? `: ${reason}` : ''}`
+        : `${LABEL[cur.type]} "${cur.title}" cancelado(a)${ids.length > 1 ? ` em ${ids.length} turmas` : ''}${reason ? `: ${reason}` : ''}`;
       tx.audit = { entity: 'diary', ids };
       return { id: cur.id, ids };
     },

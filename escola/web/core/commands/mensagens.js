@@ -47,7 +47,10 @@
       const id = env.newId('m');
       const attachments = X.attachFiles(tx, ctx, input.attachments, { coll: 'messages', id }, { max: 3 });
       const subject = V.str(input.subject, 'Assunto', { max: 120 }) || LABEL[kind];
-      tx.put('messages', { id, studentId: s.id, kind, subject, details, attachments, status: 'aberta', createdBy: ctx.user.id, createdAt: env.now, posts: [{ id: env.newId('p'), kind: 'texto', userId: ctx.user.id, body, at: env.now, attachments }] });
+      // from: lado de quem escreveu (uma conta da equipe também pode ser responsável e escrever pelo portal).
+      // Conversa aberta pela escola já começa "respondida": fica aguardando a família, não a escola.
+      const from = ctx.family ? 'familia' : 'escola';
+      tx.put('messages', { id, studentId: s.id, kind, subject, details, attachments, status: ctx.family ? 'aberta' : 'respondida', createdBy: ctx.user.id, createdAt: env.now, posts: [{ id: env.newId('p'), kind: 'texto', from, userId: ctx.user.id, body, at: env.now, attachments }] });
       tx.effect({ type: 'notify', coll: 'messages', ids: [id] });
       tx.summary = `${LABEL[kind]} sobre ${s.name} ${ctx.family ? 'enviado pela família' : 'enviado à família'}`;
       tx.audit = { entity: 'messages', ids: [id] };
@@ -61,11 +64,12 @@
     run(tx, input, ctx, env) {
       const m = tx.need('messages', input.id, 'Mensagem');
       const s = reach(tx, ctx, m);
+      if (ctx.family && tx.get('settings').familyMessages === false) fail('forbidden', 'A escola não está recebendo mensagens pelo portal. Fale com a secretaria.');
       const body = V.text(input.body, 'Resposta', { required: true, max: 3000 });
       const kind = !ctx.family && input.kind === 'registro' ? 'registro' : 'texto';
       const postId = env.newId('p');
       const attachments = X.attachFiles(tx, ctx, input.attachments, { coll: 'messages', id: m.id }, { max: 3 });
-      const posts = (m.posts || []).concat([{ id: postId, kind, userId: ctx.user.id, body, at: env.now, attachments }]).slice(-200);
+      const posts = (m.posts || []).concat([{ id: postId, kind, from: ctx.family ? 'familia' : 'escola', userId: ctx.user.id, body, at: env.now, attachments }]).slice(-200);
       // família escreveu: volta a pedir atenção da escola; escola respondeu: fica "respondida" (se não estava resolvida)
       const status = ctx.family ? 'aberta' : m.status === 'resolvida' ? 'resolvida' : 'respondida';
       tx.put('messages', { ...m, posts, status, attachments: [...new Set([...(m.attachments || []), ...attachments])] });

@@ -1,7 +1,7 @@
 /* Comandos: chamada (diária ou por aula), justificativas, notas/pareceres, etapas e conselho de classe. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('../util'), require('../perms'), require('../rules'), require('../engine'));
-  else factory(root.Core.util, root.Core.perms, root.Core.rules, root.Core.engine);
+  else (root.Core = root.Core || {}).pedagogico = factory(root.Core.util, root.Core.perms, root.Core.rules, root.Core.engine);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (util, perms, rules, E) {
   'use strict';
   const { V, fail } = util;
@@ -17,8 +17,10 @@
   };
 
   /**
-   * attendance.save {classId, date, period, marks: {studentId: P|F|J|A}, content?, baseAt?}
+   * attendance.save {classId, date, period, marks: {studentId: P|F|J|A}, content?, baseAt?, reasons?}
    * Envia só as marcações alteradas; as demais ficam como estão (ou "P" se a chamada é nova).
+   * baseAt: `at` da versão que a pessoa abriu; `null` = abriu a chamada ainda não registrada
+   * (se outra pessoa registrar antes, dá conflito). reasons: {studentId: motivo} para J/A, só com chamada.justificar.
    */
   E.define('attendance.save', {
     perm: 'chamada.registrar',
@@ -39,7 +41,8 @@
       if (!canTakeLesson(ctx, c, period, subjectId)) fail('forbidden', 'Esta aula é de outro(a) professor(a).');
       const key = rules.attendanceKey(c.id, date, period);
       const prev = tx.get('attendance', key);
-      if (prev && input.baseAt && prev.at !== input.baseAt && prev.by !== ctx.user.id) {
+      const base = Object.prototype.hasOwnProperty.call(input, 'baseAt') ? input.baseAt : undefined;
+      if (prev && base !== undefined && (base === null || base === '' || prev.at !== base) && prev.by !== ctx.user.id) {
         const who = tx.get('users', prev.by);
         fail('conflict', `${who ? who.name : 'Outra pessoa'} salvou esta chamada enquanto você editava. Confira e salve de novo.`);
       }
@@ -55,6 +58,16 @@
         if ((m === 'J' || m === 'A') && m !== old && !ctx.can('chamada.justificar')) m = 'F';
         if (m !== old && (m === 'P' || m === 'F')) delete reasons[s.id];
         marks[s.id] = m;
+      }
+      // motivo de falta justificada/abonada, para quem pode justificar (o resto é ignorado)
+      const givenReasons = input.reasons && typeof input.reasons === 'object' && !Array.isArray(input.reasons) ? input.reasons : null;
+      if (givenReasons && ctx.can('chamada.justificar')) {
+        for (const s of roster) {
+          if (!Object.prototype.hasOwnProperty.call(givenReasons, s.id) || (marks[s.id] !== 'J' && marks[s.id] !== 'A')) continue;
+          const r = V.str(givenReasons[s.id], 'Motivo', { max: 300 });
+          if (r) reasons[s.id] = r;
+          else delete reasons[s.id];
+        }
       }
       const content = input.content === undefined ? (prev && prev.content) || '' : V.text(input.content, 'Conteúdo da aula', { max: 2000 });
       tx.set('attendance', key, { marks, reasons: Object.keys(reasons).length ? reasons : undefined, subjectId, content, by: ctx.user.id, at: env.now });

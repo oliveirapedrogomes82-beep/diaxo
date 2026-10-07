@@ -254,3 +254,7 @@
 .overlay.drawer-wrap.al-dw { grid-template-rows: minmax(0, 1fr); }
 .overlay.drawer-wrap.al-dw > .modal { min-height: 0; }
 .overlay.drawer-wrap.al-dw .modal-body { min-height: 0; flex: 1 1 auto; }
+.al-restr { display: flex; gap: 8px; align-items: flex-start; font-size: .88rem; color: var(--fg); padding: 9px 12px; border-radius: var(--radius-sm); background: var(--warn-soft); }
+.al-restr > .i { color: var(--warn); margin-top: 2px; }
+.al-restr b { color: var(--warn); }
+.al-wiz .al-steps.al-many .step.done .al-step-l { display: none; }

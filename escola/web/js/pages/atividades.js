@@ -36,6 +36,10 @@
   const canAll = () => Store.can('auditoria.ver');
   const keyOf = (s) => `${Store.me ? Store.me.id : ''}|${canAll() ? s.userId || '' : 'eu'}`;
   const onPage = () => App.route()[0] === 'atividades';
+  // cada vez que a pessoa volta para a tela, busca de novo (o registro cresce o tempo todo)
+  window.addEventListener('hashchange', () => {
+    if (onPage()) state().stale = true;
+  });
 
   let seq = 0;
   const fetchPage = (s, before) => Api.audit({ before, limit: PAGE, userId: canAll() && s.userId ? s.userId : undefined });
@@ -144,7 +148,7 @@
           <p class="lead">${all
             ? html`Quem fez o quê e quando, de toda a escola${who ? html` — mostrando <b>${who}</b>` : ''}. Leituras de informação sigilosa ficam marcadas com ${icon('lock')}.`
             : 'O que você fez no sistema. Só você e a direção veem este registro.'}</p></div>
-        <div class="btn-row"><button type="button" class="btn" data-export ${!s.items.length ? raw('disabled') : ''}>${icon('download')}Exportar CSV</button></div>
+        <div class="btn-row"><button type="button" class="btn" data-refresh ${s.loading ? raw('disabled') : ''}>${icon('refresh')}Atualizar</button><button type="button" class="btn" data-export ${!s.items.length ? raw('disabled') : ''}>${icon('download')}Exportar CSV</button></div>
       </div>
       <div class="toolbar at-toolbar">
         <div class="search-box"><label class="sr-only" for="at-q">Buscar nas atividades</label>${icon('search')}<input class="input" id="at-q" type="search" placeholder="Buscar no texto (aluno, turma, ação…)" value="${s.q}" autocomplete="off"></div>
@@ -204,7 +208,12 @@
     render,
     mount(el) {
       const s = state();
-      if (!Store.preview && (s.key !== keyOf(s) || (!s.loaded && !s.loading))) load({ reset: s.key !== keyOf(s) });
+      if (!Store.preview) {
+        if (s.stale) {
+          s.stale = false;
+          load({ reset: true });
+        } else if (s.key !== keyOf(s) || (!s.loaded && !s.loading)) load({ reset: s.key !== keyOf(s) });
+      }
       const q = el.querySelector('#at-q');
       if (q)
         q.addEventListener(
@@ -230,6 +239,10 @@
       el.addEventListener('click', (e) => {
         const t = e.target;
         if (t.closest('[data-more]')) return load();
+        if (t.closest('[data-refresh]')) {
+          load({ reset: true });
+          return App.render();
+        }
         if (t.closest('[data-retry]')) {
           s.error = '';
           return load({ reset: !s.items.length });

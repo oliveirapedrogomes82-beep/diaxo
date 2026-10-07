@@ -106,6 +106,7 @@
 .eq-perm-why { display: flex; gap: 5px; align-items: flex-start; font-size: .78rem; color: var(--warn); font-weight: 600; }
 .eq-perm-why.conf { color: var(--accent-text); font-weight: 500; }
 .eq-perm-why .i { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+.eq-role-note { margin-bottom: 14px; font-size: .9rem; }
 .eq-perm-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-start; margin-bottom: 14px; }
 .eq-perm-head .grow { flex: 1; min-width: 240px; display: grid; gap: 8px; font-size: .9rem; color: var(--fg-2); }
 .eq-sums { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -251,6 +252,7 @@
   .eq-row.dir .eq-act { display: none; }
   .eq-row-head { display: none; }
   .at-day-head { top: 61px; }
+  .eq-prof-bar { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); border-radius: 0; box-shadow: var(--shadow-2); }
 }
 @media (max-width: 640px) {
   .eq-toolbar .search-box { flex-basis: 100%; max-width: none; }

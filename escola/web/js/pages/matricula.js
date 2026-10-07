@@ -226,7 +226,7 @@
         </dl>`) : ''}
         <p class="small muted al-seq">${icon('info')} Número de matrícula previsto: <b class="num">${seq}</b> (confirmado ao salvar).</p>`;
     };
-    const stepsHTML = () => html`<div class="steps al-steps" aria-label="Etapas da matrícula">${STEPS.map(
+    const stepsHTML = () => html`<div class="steps al-steps ${STEPS.length > 4 ? 'al-many' : ''}" aria-label="Etapas da matrícula">${STEPS.map(
       (x, i) => html`<span class="step ${i === step ? 'current' : i < step ? 'done' : ''}" ${i === step ? raw('aria-current="step"') : ''}><b>${i < step ? icon('check') : i + 1}</b><span class="al-step-l">${x.label}</span></span>`,
     )}</div>`;
 
@@ -415,6 +415,15 @@
           }
         });
         body.addEventListener('input', (e) => {
+          // a mensagem de erro some assim que a pessoa corrige o campo
+          const wrap = e.target.closest && e.target.closest('[data-field]');
+          if (wrap && wrap.querySelector('.error')) {
+            wrap.querySelectorAll('.error').forEach((x) => x.remove());
+            wrap.querySelectorAll('.invalid').forEach((x) => {
+              x.classList.remove('invalid');
+              x.removeAttribute('aria-invalid');
+            });
+          }
           if (sid() === 'mens' && !done) {
             collect(el);
             const n = UI.$('[data-wz-net]', body);
@@ -424,9 +433,10 @@
           if (e.target.matches('[data-wz-sib]')) drawSiblings(e.target.value);
         });
         body.addEventListener('change', (e) => {
-          if (e.target.name === 'classId') {
-            const w = UI.$('[data-field="classId"] .error', body);
-            w && w.remove();
+          const wrap = e.target.closest && e.target.closest('[data-field]');
+          if (wrap && (e.target.type === 'radio' || e.target.type === 'checkbox')) {
+            wrap.querySelectorAll('.error').forEach((x) => x.remove());
+            wrap.querySelectorAll('.invalid').forEach((x) => x.classList.remove('invalid'));
           }
         });
 

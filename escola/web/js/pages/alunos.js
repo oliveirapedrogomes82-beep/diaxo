@@ -524,7 +524,7 @@
       <div class="card-head"><div><h2>Quem pode buscar</h2><p class="sub">A portaria confere o documento na saída.</p></div>
         ${edit && list.length < 10 ? html`<button type="button" class="btn sm" data-ald="k-add">${icon('plus')}Adicionar</button>` : ''}</div>
       <div class="card-body al-pickup">
-        ${s.restrictions ? html`<div class="al-alert warn">${icon('lock')}<div><b>Restrição de retirada</b><p class="al-pre">${s.restrictions}</p></div></div>` : ''}
+        ${s.restrictions ? html`<p class="al-restr">${icon('lock')}<span><b>Restrição de retirada:</b> ${s.restrictions}</span></p>` : ''}
         <div><h3 class="al-sub">Responsáveis</h3>
           ${gs.length ? html`<div class="al-who">${gs.map((g) => html`<span class="al-who-item">${UI.avatar(g.name, 'sm')}<span><b>${g.name}</b><span class="person-sub">${g.relation}</span></span></span>`)}</div>` : html`<p class="muted small">Nenhum responsável marcado como "pode buscar".</p>`}
         </div>
@@ -958,9 +958,35 @@
     });
   };
 
+  /** O que impede a exclusão (mesma regra do servidor, com o que está no retrato). */
+  const historyOf = (s) => {
+    const st = Store.state;
+    const pre = `|${s.id}|`;
+    const out = [];
+    if (Object.keys(st.grades || {}).some((k) => k.includes(pre))) out.push('notas');
+    if (Object.values(st.attendance || {}).some((a) => a.marks && s.id in a.marks)) out.push('chamadas');
+    if ((st.invoices || []).some((i) => i.studentId === s.id)) out.push('cobranças');
+    if ((st.support || []).some((r) => r.studentId === s.id)) out.push('atendimentos');
+    if ((st.messages || []).some((m) => m.studentId === s.id)) out.push('mensagens');
+    if ((st.diary || []).some((d) => d.studentId && (d.recipients || []).includes(s.id))) out.push('registros na agenda');
+    return out;
+  };
+
   Actions.excluirAluno = async (id) => {
     const s = fresh(id);
     if (!s || !can('alunos.excluir')) return;
+    const found = historyOf(s);
+    if (found.length) {
+      const list = found.length > 1 ? `${found.slice(0, -1).join(', ')} e ${found[found.length - 1]}` : found[0];
+      const go = await UI.confirm({
+        title: 'Este cadastro não pode ser excluído',
+        text: html`<b>${s.name}</b> já tem ${list}. Para guardar o histórico, registre a saída em <b>Situação da matrícula</b> (transferido ou trancado).${found.includes('cobranças') ? ' Se a matrícula foi feita por engano, cancele antes as cobranças no Financeiro.' : ''}`,
+        ok: can('alunos.cadastrar') ? 'Abrir situação da matrícula' : 'Entendi',
+        cancel: 'Fechar',
+      });
+      if (go && can('alunos.cadastrar')) Actions.situacaoMatricula(s.id);
+      return;
+    }
     const ok = await UI.confirm({
       title: 'Excluir este cadastro?',
       text: html`Isto apaga o cadastro de <b>${s.name}</b> e <b>não pode ser desfeito</b>. Use só para matrícula feita por engano. Se o aluno saiu da escola, registre a transferência em <b>Situação da matrícula</b>: o histórico fica guardado.`,
@@ -1099,7 +1125,7 @@
         </div>`}
     </article>`;
     const sheet = html`<div class="al-sheet">
-      <header class="al-sheet-head"><div><b>${school}</b><h1>Portal da família: código de primeiro acesso</h1><p>${klass ? klass.name + ' · ' : ''}gerado em ${U.fmtDate(U.today())}</p></div></header>
+      <header class="al-sheet-head"><div><b>${school}</b><h1>Portal da família: código de primeiro acesso</h1><p>${klass ? klass.name + ' · ' : ''}gerado em ${U.fmtDate(U.today())}${Q.settings().phone ? ` · dúvidas: secretaria, ${Q.settings().phone}` : ''}</p></div></header>
       <div class="al-icards">${entries.map((e) => card(e, true))}</div>
     </div>`;
     const allText = [
