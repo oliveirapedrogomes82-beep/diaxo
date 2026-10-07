@@ -187,7 +187,8 @@
       privacy: { controller: 'Colégio Ipê Amarelo Ltda.', dpoName: 'Ana Beatriz Moura', dpoContact: 'privacidade@ipeamarelo.edu.br', noticeVersion: '1' },
     });
     for (let t = 1; t < s.term; t++) s.terms[year][t] = { closed: true, released: true };
-    const stamp = (d, h = 10, m = 0) => `${d}T${pad(h + 3)}:${pad(m)}:00.000Z`; // horário de Brasília em UTC
+    // horário de Brasília (UTC−3) convertido para um instante UTC válido (17h → 20:00Z; 22h → 01:00Z do dia seguinte)
+    const stamp = (d, h = 10, m = 0) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)), h + 3, m)).toISOString();
     let userSeq = 0;
     const newUser = (o) => ({
       id: num('u', ++userSeq),

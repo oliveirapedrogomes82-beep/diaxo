@@ -11,6 +11,7 @@ const Store = (() => {
   let reads = {};
   let rev = 0;
   let boot = null;
+  let readsSince = null; // instante (do servidor) até onde já recebemos os "visualizados"
   let preview = null; // {saved, me} quando está "vendo como"
   let online = true;
   let queue = Promise.resolve();
@@ -54,6 +55,7 @@ const Store = (() => {
     reads = snap.reads || {};
     rev = Number(snap.rev) || 0;
     boot = snap.boot || null;
+    readsSince = snap.now || null;
     index = new Map();
     version++;
     emit();
@@ -91,11 +93,17 @@ const Store = (() => {
     if (!me || preview || polling || pending) return;
     polling = true;
     try {
-      const r = await Api.changes(rev, boot);
+      const r = await Api.changes(rev, boot, readsSince);
       if (r.resync) await load();
       else {
+        if (r.reads && r.reads.length) {
+          for (const [item, uid, at] of r.reads) reads[item] = { ...(reads[item] || {}), [uid]: at };
+          version++;
+          if (!r.changes || !r.changes.length) emit();
+        }
         apply(r.changes);
         rev = r.rev;
+        if (r.now) readsSince = r.now;
       }
       setOnline(true);
     } catch (err) {
@@ -447,6 +455,8 @@ const Q = (() => {
   const consecutiveAbsences = (sid, classId) => R.consecutiveAbsences(S().attendance, sid, classId);
   /** Turmas (que eu posso registrar) sem chamada hoje. */
   const pendingRolls = (date = today()) => {
+    // a tela de chamada registra Q.rollsToDo com a regra exata de quem registra cada aula
+    if (typeof Q.rollsToDo === 'function') return Q.rollsToDo(date).map((x) => x.klass);
     if (!Store.can('chamada.registrar') || !isSchoolDay(date)) return [];
     const mine = Store.me.scope === 'todas' ? [] : myClasses();
     return (mine.length ? mine : classes()).filter((c) => roster(c.id).length && periods(c.id, date).some((p) => !attendance(c.id, date, p.period)));

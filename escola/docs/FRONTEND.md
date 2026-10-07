@@ -93,3 +93,31 @@ do campo. Por isso:
 - `npm run demo` sobe o servidor com a mesma escola em memória (http://127.0.0.1:3000).
 - Playwright: `require('/opt/node22/lib/node_modules/playwright')`, Chromium já instalado. Use um contexto
   novo por teste (a demonstração guarda dados no IndexedDB do contexto).
+
+## 6. Convenções já adotadas pelos módulos (leia antes de integrar)
+
+- **Widgets do painel**: `render()` devolve o cartão inteiro — `<section class="card <prefixo>-widget">` com
+  `card-head` (título com ícone e um link/sub) e `card-body`. O host (painel da equipe ou início da família)
+  **não** embrulha em outro `.card`: só posiciona numa grade pelo `size` (`full` = linha inteira,
+  `half` = metade, `third` = um terço; no celular tudo vira uma coluna) e chama `mount(el)` no elemento do
+  widget. Widgets registrados até agora: `agenda-hoje`, `agenda-aprovacoes`, `agenda-autorizacoes-nao`,
+  `agenda-pendente` (família), `alertas-saude`, `aniversariantes`, `chamadas-pendentes`, `faltas-seguidas`,
+  `notas-pendentes`, `equipe-acessos`.
+- **Ações compartilhadas já existentes** (chame com guarda `typeof Actions.x === 'function'`):
+  `Actions.matricular({classId})`, `verAluno(id, aba?)`, `editarAluno(id)`, `convidarResponsavel(studentId, guardianId)`,
+  `situacaoMatricula(id)`, `trocarTurma(id)`, `excluirAluno(id)`, `convidarFamilias(classId)`,
+  `novaConta()`, `editarConta(id)`, `verPessoa(id)`, `novaTurma()`, `editarTurma(id)`,
+  `fazerChamada(classId, {date, period})`, `justificarFalta(...)`, `abrirNotas(...)`,
+  `novoItemAgenda({classId, studentId, type})`, `verRespostasAgenda(itemId)`.
+- **Consultas extras** (de `turmas.js`): `Q.canTakeLesson`, `Q.rollsToDo(date)` → `[{klass, missing}]`,
+  `Q.rollState`, `Q.absenceStreaks`, `Q.absenceAlert`, `Q.studentAverage`, `Q.classStats`,
+  `Q.subjectAttendance`, `Q.atRisk`, `Q.attendanceRecords`, `Q.homeroom`, `Q.gradeTone`.
+  `Q.pendingRolls()` usa `Q.rollsToDo` quando ele existe. `window.AlunosKit` tem utilitários da ficha
+  (situação da matrícula, situação no portal, etc.).
+- **Abas da ficha do aluno** aceitam `badge(student)` (número ou `{n, tone, title}`); um erro numa aba fica
+  contido nela. Rotas: `#alunos/<id>/<aba>`.
+- `Store.reads` (visualizações da agenda) e os campos `lastLoginAt`/`hasPassword`/`invitePending` das contas
+  chegam também pela sincronização (não só no retrato).
+- `UI.formDrawer` aceita `cls` (no `.modal`) e `wrapCls` (no `.overlay`); gavetas longas rolam por dentro.
+- `UI.tabs`/`UI.seg` marcam o item ativo (`aria-selected`/`aria-pressed="true"`).
+- `Api.history('classes')` devolve turmas encerradas.

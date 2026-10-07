@@ -244,7 +244,8 @@
       messages(m) {
         const last = (m.posts && m.posts.length ? m.posts[m.posts.length - 1].at : m.createdAt || '').slice(0, 10);
         if (!inWindow(last) && m.status === 'resolvida') return null;
-        if (ctx.family) return ctx.studentIds.has(m.studentId) ? m : null;
+        // "registro" = nota interna da equipe na conversa: nunca vai para a família
+        if (ctx.family) return ctx.studentIds.has(m.studentId) ? { ...m, posts: (m.posts || []).filter((p) => p.kind !== 'registro') } : null;
         if (!can('mensagens.responder')) return null;
         return studentVisible(m.studentId) ? m : null;
       },
@@ -366,7 +367,7 @@
   function history(state, user, coll, { classId = null, studentId = null, before = null, limit = 100 } = {}, env = {}) {
     const { filter } = makeFilter(state, user, { ...env, history: true });
     const out = [];
-    const dateOf = (v, k) => (coll === 'diary' ? v.date : coll === 'messages' ? (v.createdAt || '').slice(0, 10) : coll === 'routines' || coll === 'attendance' ? k.split('|')[1] : coll === 'invoices' ? v.due : '');
+    const dateOf = (v, k) => (coll === 'diary' ? v.date : coll === 'messages' ? (v.createdAt || '').slice(0, 10) : coll === 'routines' || coll === 'attendance' ? k.split('|')[1] : coll === 'invoices' ? v.due : coll === 'classes' ? `${v.year || ''}-12-31` : '');
     const matches = (v, k) => {
       if (classId) {
         if (coll === 'diary' && v.classId !== classId) return false;

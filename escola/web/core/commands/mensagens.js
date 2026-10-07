@@ -71,7 +71,8 @@
       const attachments = X.attachFiles(tx, ctx, input.attachments, { coll: 'messages', id: m.id }, { max: 3 });
       const posts = (m.posts || []).concat([{ id: postId, kind, from: ctx.family ? 'familia' : 'escola', userId: ctx.user.id, body, at: env.now, attachments }]).slice(-200);
       // família escreveu: volta a pedir atenção da escola; escola respondeu: fica "respondida" (se não estava resolvida)
-      const status = ctx.family ? 'aberta' : m.status === 'resolvida' ? 'resolvida' : 'respondida';
+      // nota interna ("registro") não muda a situação: a família não a vê
+      const status = kind === 'registro' ? m.status : ctx.family ? 'aberta' : m.status === 'resolvida' ? 'resolvida' : 'respondida';
       tx.put('messages', { ...m, posts, status, attachments: [...new Set([...(m.attachments || []), ...attachments])] });
       tx.effect({ type: 'notify', coll: 'messages', ids: [m.id] });
       tx.summary = `${kind === 'registro' ? 'Registro' : 'Resposta'} na mensagem "${m.subject}" (${s.name})`;

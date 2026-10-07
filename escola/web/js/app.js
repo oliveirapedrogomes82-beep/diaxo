@@ -531,7 +531,7 @@ const App = (() => {
     const same = key === current;
     const y = window.scrollY;
     current = key;
-    UI.closeMenu();
+    if (!same) UI.closeMenu();
     const el = document.createElement('div');
     el.className = 'page';
     let ok = true;

@@ -49,9 +49,9 @@ const UI = (() => {
     html`<div class="empty">${icon(ic)}<h3>${title}</h3>${text ? html`<p>${text}</p>` : ''}${action ? html`<div class="btn-row" style="justify-content:center">${action}</div>` : ''}</div>`;
   const meter = (pct, tone = '') => html`<div class="meter ${tone}" role="presentation"><span style="width:${U.clamp(pct || 0, 0, 100)}%"></span></div>`;
   const tabs = (items, active, attr = 'data-tab') =>
-    html`<div class="tabs" role="tablist">${items.map(([id, label, extra]) => html`<button type="button" role="tab" ${raw(attr)}="${id}" aria-selected="${id === active}">${label}${extra || ''}</button>`)}</div>`;
+    html`<div class="tabs" role="tablist">${items.map(([id, label, extra]) => html`<button type="button" role="tab" ${raw(attr)}="${id}" aria-selected="${String(id === active)}">${label}${extra || ''}</button>`)}</div>`;
   const seg = (items, active, attr) =>
-    html`<div class="seg" role="group">${items.map(([v, l]) => html`<button type="button" ${raw(attr)}="${v}" aria-pressed="${String(v) === String(active)}">${l}</button>`)}</div>`;
+    html`<div class="seg" role="group">${items.map(([v, l]) => html`<button type="button" ${raw(attr)}="${v}" aria-pressed="${String(String(v) === String(active))}">${l}</button>`)}</div>`;
   /** "Sem acesso" para campos que o servidor retirou do retrato (doc._hidden). */
   const hidden = (doc, field) => doc && Array.isArray(doc._hidden) && doc._hidden.includes(field);
   const noAccess = (text = 'Sem acesso') => html`<span class="muted small no-access">${icon('lock')} ${text}</span>`;
@@ -84,13 +84,13 @@ const UI = (() => {
 
   /**
    * Abre um modal (ou gaveta lateral). title é texto; sub, body, foot e top são html``.
-   * opts: { title, sub, body, foot, top, size: sm|lg|xl, drawer, cls, head:false, onMount(el, api), onClose, guard }
+   * opts: { title, sub, body, foot, top, size: sm|lg|xl, drawer, cls (no .modal), wrapCls (no .overlay), head:false, onMount(el, api), onClose, guard }
    * api: { el, wrap, close(), requestClose(), setDirty(v), setBody(html), setFoot(html) }
    */
   const modal = (opts) => {
     const prevFocus = document.activeElement;
     const wrap = document.createElement('div');
-    wrap.className = 'overlay' + (opts.drawer ? ' drawer-wrap' : '');
+    wrap.className = 'overlay' + (opts.drawer ? ' drawer-wrap' : '') + (opts.wrapCls ? ' ' + opts.wrapCls : '');
     const titleId = 'm' + Math.random().toString(36).slice(2, 9);
     setHTML(
       wrap,
@@ -314,6 +314,7 @@ const UI = (() => {
     el.style.left = left + 'px';
     el.style.top = top + 'px';
     openMenu = el;
+    menuOpenedAt = Date.now();
     const btns = $$('button', el);
     btns[0] && btns[0].focus();
     el.addEventListener('click', (e) => {
@@ -341,8 +342,17 @@ const UI = (() => {
   document.addEventListener('mousedown', (e) => {
     if (openMenu && !openMenu.contains(e.target)) closeMenu();
   });
+  let menuOpenedAt = 0;
   window.addEventListener('resize', closeMenu);
-  window.addEventListener('scroll', closeMenu, true);
+  window.addEventListener(
+    'scroll',
+    (e) => {
+      if (!openMenu || (e.target instanceof Node && openMenu.contains(e.target))) return;
+      if (Date.now() - menuOpenedAt < 300) return; // rolagem causada ao abrir (scrollIntoView, foco)
+      closeMenu();
+    },
+    true,
+  );
 
   // ---------- área de transferência ----------
   const copy = async (text, msg = 'Copiado') => {
@@ -508,12 +518,14 @@ const UI = (() => {
    * Gaveta de formulário. onSubmit(data, api) pode ser assíncrono; devolver false ou null mantém aberta
    * (use UI.act dentro dele: em caso de erro devolve null e o erro já aparece no campo ou num aviso).
    */
-  const formDrawer = ({ title, sub, defs, values = {}, submitLabel = 'Salvar', onSubmit, extraFoot = '', layout = 'grid', top = '', bottom = '', onMount, size = '' }) =>
+  const formDrawer = ({ title, sub, defs, values = {}, submitLabel = 'Salvar', onSubmit, extraFoot = '', layout = 'grid', top = '', bottom = '', onMount, size = '', cls = '', wrapCls = '' }) =>
     modal({
       title,
       sub,
       drawer: true,
       size,
+      cls,
+      wrapCls,
       body: html`${top}<form class="${layout === 'grid' ? 'form-grid' : 'form-section'}" novalidate>${fields(defs, values)}<button type="submit" hidden></button></form>${bottom}`,
       foot: html`${extraFoot}<button class="btn" type="button" data-close>Cancelar</button><button class="btn primary" type="button" data-submit>${icon('check')}<span>${submitLabel}</span></button>`,
       onMount(el, api) {

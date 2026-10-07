@@ -75,7 +75,7 @@ const Api = (() => {
       consent: (version) => req('POST', '/consent', { version }),
       mode: (mode) => req('POST', '/mode', { mode }),
       snapshot: () => req('GET', '/snapshot'),
-      changes: (since, boot) => req('GET', `/changes${qs({ since, boot })}`),
+      changes: (since, boot, readsSince) => req('GET', `/changes${qs({ since, boot, readsSince })}`),
       cmd: (name, input, requestId, password) => req('POST', '/cmd/' + encodeURIComponent(name), { input, requestId, password }),
       undo: (token) => req('POST', '/undo', { token }),
       read: (itemIds) => req('POST', '/read', { itemIds }),
@@ -346,8 +346,11 @@ const Api = (() => {
       for (const ef of out.effects || []) {
         if (ef.type === 'invite') {
           const clean = ef.code.replace(/[^A-Z0-9]/g, '');
-          invites[clean] = { userId: ef.userId, purpose: ef.purpose, expiresAt: ef.expiresAt, usedAt: null };
-          shown.push({ type: 'invite', userId: ef.userId, code: ef.code, expiresAt: ef.expiresAt, purpose: ef.purpose, link: `${location.href.split('#')[0]}#acesso/${ef.code}` });
+          const purpose = ef.purpose === 'redefinicao' && !creds[ef.userId] ? 'convite' : ef.purpose;
+          // um código novo invalida os anteriores da mesma conta (como no servidor)
+          for (const [k, inv] of Object.entries(invites)) if (inv.userId === ef.userId && !inv.usedAt) delete invites[k];
+          invites[clean] = { userId: ef.userId, purpose, expiresAt: ef.expiresAt, usedAt: null };
+          shown.push({ type: 'invite', userId: ef.userId, code: ef.code, expiresAt: ef.expiresAt, purpose, link: `${location.href.split('#')[0]}#acesso/${ef.code}` });
         } else if (ef.type === 'deleteCredentials') delete creds[ef.userId];
         else if (ef.type === 'deleteFile') {
           files.delete(ef.id);
@@ -364,15 +367,23 @@ const Api = (() => {
       return { out, shown };
     };
 
+    /** Último acesso, senha criada e convite pendente — em cópias, nunca no estado. */
+    const annotateUsers = (u, permSet, users) => {
+      const staff = permSet.has('usuarios.gerenciar');
+      const families = permSet.has('familias.acessos');
+      if (!staff && !families) return users;
+      return users.map((x) => (!x || x.id === u.id || !(staff || (x.role === 'responsavel' && families)) ? x : { ...x, lastLoginAt: meta.logins[x.id] || null, hasPassword: !!creds[x.id], invitePending: pendingInvite(x.id) }));
+    };
+    const annotateChanges = (u, e, changes) => {
+      if (!changes.some((c) => c.coll === 'users' && c.op === 'put')) return changes;
+      const ctx = Perms.context(u, state, e);
+      const vals = annotateUsers(u, ctx.perms, changes.map((c) => (c.coll === 'users' && c.op === 'put' ? c.value : null)));
+      return changes.map((c, i) => (vals[i] ? { ...c, value: vals[i] } : c));
+    };
     const snapshotFor = (u) => {
       const e = viewEnv();
       const snap = View.snapshot(state, u, e);
-      for (const x of snap.data.users) {
-        if (x.id === u.id || (!snap.me.perms.includes('usuarios.gerenciar') && !(x.role === 'responsavel' && snap.me.perms.includes('familias.acessos')))) continue;
-        x.lastLoginAt = meta.logins[x.id] || null;
-        x.hasPassword = !!creds[x.id];
-        x.invitePending = pendingInvite(x.id);
-      }
+      snap.data.users = annotateUsers(u, new Set(snap.me.perms), snap.data.users);
       const reads = {};
       if (snap.me.family) {
         for (const [item, by] of Object.entries(meta.reads)) if (by[u.id]) reads[item] = { [u.id]: by[u.id] };
@@ -380,7 +391,15 @@ const Api = (() => {
         for (const d of snap.data.diary) if (meta.reads[d.id]) reads[d.id] = { ...meta.reads[d.id] };
       }
       fingerprint = Perms.fingerprint(u, state, e);
-      return clone({ rev, boot: bootId, me: snap.me, data: snap.data, reads });
+      return clone({ rev, boot: bootId, now: e.now, me: snap.me, data: snap.data, reads });
+    };
+    const readsSince = (u, e, since) => {
+      if (e.mode === 'familia' || Perms.isFamily(u) || !since || !Perms.context(u, state, e).perms.has('diario.ver')) return [];
+      const f = View.makeFilter(state, u, e);
+      const byId = new Map(state.diary.map((d) => [d.id, d]));
+      const out = [];
+      for (const [item, by] of Object.entries(meta.reads)) for (const [uid, at] of Object.entries(by)) if (at > since && f.diaryFor(byId.get(item))) out.push([item, uid, at]);
+      return out;
     };
 
     const startSession = (u, mode) => {
@@ -513,7 +532,7 @@ const Api = (() => {
         await ready;
         return snapshotFor(needUser());
       },
-      async changes(since, boot) {
+      async changes(since, boot, readsAfter) {
         await ready;
         if (stale) {
           await loadFromDb();
@@ -526,7 +545,10 @@ const Api = (() => {
         if (boot !== bootId || !Number.isFinite(Number(since)) || since > rev || since < oldest - 1 || Perms.fingerprint(u, state, e) !== fingerprint) return { rev, resync: true };
         const out = [];
         for (const c of commits) if (c.rev > since) out.push(...View.visibleChanges(state, u, c.changes, c.befores, e));
-        return clone({ rev, changes: out });
+        const body = { rev, now: e.now, changes: annotateChanges(u, e, out) };
+        const reads = readsAfter ? readsSince(u, e, readsAfter) : [];
+        if (reads.length) body.reads = reads;
+        return clone(body);
       },
       async cmd(name, input, requestId, password) {
         await ready;
@@ -541,7 +563,7 @@ const Api = (() => {
         const e = viewEnv();
         const fpBefore = Perms.fingerprint(u, state, e);
         const { out, shown } = execute(u, name, clone(input));
-        const response = { result: clone(out.result), rev, changes: clone(View.visibleChanges(state, u, out.changes, out.befores, e)) };
+        const response = { result: clone(out.result), rev, changes: clone(annotateChanges(u, e, View.visibleChanges(state, u, out.changes, out.befores, e))) };
         if (shown.length) response.effects = shown;
         if (out.undoable) {
           const token = util.uid('t') + util.uid('k');
@@ -593,7 +615,7 @@ const Api = (() => {
       },
       async history(coll, params = {}) {
         const u = needUser();
-        if (!['diary', 'routines', 'messages', 'attendance', 'invoices'].includes(coll)) fail('not_found', 'Histórico não disponível.', 404);
+        if (!['diary', 'routines', 'messages', 'attendance', 'invoices', 'classes'].includes(coll)) fail('not_found', 'Histórico não disponível.', 404);
         return clone(View.history(state, u, coll, params, viewEnv()));
       },
       async audit(params = {}) {

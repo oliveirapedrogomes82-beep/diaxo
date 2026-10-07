@@ -148,3 +148,16 @@ test('desempenho: retrato da diretora < 3 MB e comandos rápidos', () => {
   const per = Number(process.hrtime.bigint() - t1) / 1e6 / 20;
   assert.ok(per < 50, `chamada levou ${per} ms`);
 });
+
+test('mensagens: nota interna da equipe ("registro") nunca vai para a família', () => {
+  const st = fresh();
+  const fam = family(st);
+  const kid = kidsOf(st, fam)[0];
+  const m = run(st, fam, 'messages.create', { studentId: kid.id, kind: 'recado', body: 'Oi' });
+  const sec = who(st, 'Rita');
+  run(st, sec, 'messages.reply', { id: m.result.id, body: 'Mãe ligou, já resolvido por telefone', kind: 'registro' });
+  assert.equal(st.messages.find((x) => x.id === m.result.id).status, 'aberta');
+  const seen = snapshot(st, fam).data.messages.find((x) => x.id === m.result.id);
+  assert.ok(seen.posts.every((p) => p.kind !== 'registro'));
+  assert.equal(snapshot(st, sec).data.messages.find((x) => x.id === m.result.id).posts.length, 2);
+});

@@ -74,8 +74,8 @@
     const d = util.digits(phone);
     for (const u of tx.list('users')) {
       if (u.id === exceptId) continue;
-      if (email && u.email && u.email.toLowerCase() === email.toLowerCase()) fail('conflict', `O e-mail ${email} já é usado por outra conta.`);
-      if (d && u.phone && util.digits(u.phone) === d) fail('conflict', `O celular ${phone} já é usado por outra conta.`);
+      if (email && u.email && u.email.toLowerCase() === email.toLowerCase()) fail('conflict', `O e-mail ${email} já é usado por outra conta.`, 'email');
+      if (d && u.phone && util.digits(u.phone) === d) fail('conflict', `O celular ${phone} já é usado por outra conta.`, 'phone');
     }
   };
 

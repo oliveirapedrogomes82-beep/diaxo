@@ -82,6 +82,7 @@ class Database {
       putRead: p('INSERT INTO reads (item_id, user_id, at) VALUES (?, ?, ?) ON CONFLICT(item_id, user_id) DO NOTHING'),
       readsFor: p('SELECT item_id, user_id, at FROM reads WHERE item_id IN (SELECT value FROM json_each(?))'),
       readsByUser: p('SELECT item_id, at FROM reads WHERE user_id = ?'),
+      readsSince: p('SELECT item_id, user_id, at FROM reads WHERE at > ? ORDER BY at LIMIT 5000'),
       getRequest: p('SELECT response FROM requests WHERE user_id = ? AND request_id = ?'),
       putRequest: p('INSERT OR REPLACE INTO requests (user_id, request_id, at, response) VALUES (?, ?, ?, ?)'),
       purgeRequests: p('DELETE FROM requests WHERE at < ?'),
@@ -262,6 +263,9 @@ class Database {
   }
   readsByUser(userId) {
     return this.q.readsByUser.all(userId);
+  }
+  readsSince(at) {
+    return this.q.readsSince.all(at);
   }
 
   // ---------- idempotência ----------

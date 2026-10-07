@@ -324,26 +324,43 @@ class Api {
   }
 
   // ---------- retrato e deltas ----------
+  /** Último acesso, senha criada e convite pendente (dados fora do estado), só para quem gerencia contas. Nunca altera o estado. */
+  annotateUsers(userId, permSet, users) {
+    const staff = permSet.has('usuarios.gerenciar');
+    const families = permSet.has('familias.acessos');
+    if (!staff && !families) return users;
+    const creds = this.db.allCredentials();
+    const pending = this.db.pendingInvites();
+    return users.map((u) => {
+      if (!u || u.id === userId || !(staff || (u.role === 'responsavel' && families))) return u;
+      const c = creds.get(u.id);
+      return { ...u, lastLoginAt: c ? c.last_login_at : null, hasPassword: !!(c && c.has_password), invitePending: pending.get(u.id) || null };
+    });
+  }
+  annotateChanges(s, env, changes) {
+    if (!changes.some((c) => c.coll === 'users' && c.op === 'put')) return changes;
+    const ctx = Perms.context(s.user, this.state, env);
+    const annotated = this.annotateUsers(s.user.id, ctx.perms, changes.map((c) => (c.coll === 'users' && c.op === 'put' ? c.value : null)));
+    return changes.map((c, i) => (annotated[i] ? { ...c, value: annotated[i] } : c));
+  }
   snapshotFor(s) {
     const env = this.viewEnv(s);
     const snap = View.snapshot(this.state, s.user, env);
-    // dados fora do estado: último acesso e convites pendentes (para quem gerencia contas), leituras
-    const creds = this.db.allCredentials();
-    const pending = this.db.pendingInvites();
-    for (const u of snap.data.users) {
-      if (u.id === s.user.id || !snap.me.perms.includes('usuarios.gerenciar') && !(u.role === 'responsavel' && snap.me.perms.includes('familias.acessos'))) continue;
-      const c = creds.get(u.id);
-      u.lastLoginAt = c ? c.last_login_at : null;
-      u.hasPassword = !!(c && c.has_password);
-      u.invitePending = pending.get(u.id) || null;
-    }
+    snap.data.users = this.annotateUsers(s.user.id, new Set(snap.me.perms), snap.data.users);
     let reads = {};
     if (snap.me.family) for (const r of this.db.readsByUser(s.user.id)) reads[r.item_id] = { [s.user.id]: r.at };
     else if (snap.me.perms.includes('diario.ver')) {
       for (const r of this.db.readsFor(snap.data.diary.map((d) => d.id))) (reads[r.item_id] = reads[r.item_id] || {})[r.user_id] = r.at;
     }
     this.fingerprints.set(s.tokenHash, Perms.fingerprint(s.user, this.state, env));
-    return { rev: this.db.rev, boot: this.bootId, me: snap.me, data: snap.data, reads };
+    return { rev: this.db.rev, boot: this.bootId, now: env.now, me: snap.me, data: snap.data, reads };
+  }
+  /** "Visualizado" das famílias desde um instante, para a equipe que acompanha a agenda. */
+  readsSince(s, env, since) {
+    if (env.mode === 'familia' || Perms.isFamily(s.user) || !since || !Perms.context(s.user, this.state, env).perms.has('diario.ver')) return undefined;
+    const f = View.makeFilter(this.state, s.user, env);
+    const byId = new Map(this.state.diary.map((d) => [d.id, d]));
+    return this.db.readsSince(since).filter((r) => f.diaryFor(byId.get(r.item_id))).map((r) => [r.item_id, r.user_id, r.at]);
   }
   getSnapshot(req, res) {
     const s = this.needSession(req);
@@ -353,14 +370,19 @@ class Api {
     const s = this.needSession(req, false);
     const since = Number(url.searchParams.get('since'));
     const boot = url.searchParams.get('boot');
+    const readsAfter = url.searchParams.get('readsSince');
     const rev = this.db.rev;
     const env = this.viewEnv(s);
     const fp = Perms.fingerprint(s.user, this.state, env);
     const oldest = this.commits.length ? this.commits[0].rev : rev + 1;
     if (boot !== this.bootId || !Number.isFinite(since) || since > rev || since < oldest - 1 || this.fingerprints.get(s.tokenHash) !== fp) return sendJSON(req, res, 200, { rev, resync: true });
-    const changes = [];
+    let changes = [];
     for (const c of this.commits) if (c.rev > since) changes.push(...View.visibleChanges(this.state, s.user, c.changes, c.befores, env));
-    return sendJSON(req, res, 200, { rev, changes });
+    changes = this.annotateChanges(s, env, changes);
+    const body = { rev, now: env.now, changes };
+    const reads = readsAfter && !isNaN(Date.parse(readsAfter)) ? this.readsSince(s, env, new Date(readsAfter).toISOString()) : undefined;
+    if (reads && reads.length) body.reads = reads;
+    return sendJSON(req, res, 200, body);
   }
 
   // ---------- comandos ----------
@@ -380,8 +402,10 @@ class Api {
     for (const e of out.effects || []) {
       if (e.type === 'invite') {
         const clean = e.code.replace(/[^A-Z0-9]/g, '');
-        invites.push({ codeHash: auth.sha256('invite:' + clean), userId: e.userId, purpose: e.purpose, expiresAt: e.expiresAt });
-        shown.push({ type: 'invite', userId: e.userId, code: e.code, expiresAt: e.expiresAt, purpose: e.purpose, link: `${this.config.publicUrl || ''}/#acesso/${e.code}` });
+        const cred = this.db.getCredentials(e.userId);
+        const purpose = e.purpose === 'redefinicao' && !(cred && cred.hash) ? 'convite' : e.purpose; // quem nunca criou senha recebe "primeiro acesso"
+        invites.push({ codeHash: auth.sha256('invite:' + clean), userId: e.userId, purpose, expiresAt: e.expiresAt });
+        shown.push({ type: 'invite', userId: e.userId, code: e.code, expiresAt: e.expiresAt, purpose, link: `${this.config.publicUrl || ''}/#acesso/${e.code}` });
       } else if (e.type === 'endSessions' && (!s || e.userId !== s.user.id)) endSessions.push(e.userId);
       else if (e.type === 'deleteCredentials') deleteCredentials.push(e.userId);
     }
@@ -419,7 +443,7 @@ class Api {
     }
     const { out, rev, shown, fpBefore } = this.execute(s, name, body.input, req);
     const env = this.viewEnv(s);
-    const response = { result: out.result, rev, changes: View.visibleChanges(this.state, s.user, out.changes, out.befores, env) };
+    const response = { result: out.result, rev, changes: this.annotateChanges(s, env, View.visibleChanges(this.state, s.user, out.changes, out.befores, env)) };
     if (shown.length) response.effects = shown;
     if (out.undoable) {
       const token = auth.newToken();
@@ -480,7 +504,7 @@ class Api {
 
   getHistory(req, res, url, coll) {
     const s = this.needSession(req);
-    if (!['diary', 'routines', 'messages', 'attendance', 'invoices'].includes(coll)) throw new HttpError(404, 'not_found', 'Histórico não disponível.');
+    if (!['diary', 'routines', 'messages', 'attendance', 'invoices', 'classes'].includes(coll)) throw new HttpError(404, 'not_found', 'Histórico não disponível.');
     const q = (k) => {
       const v = url.searchParams.get(k);
       return v && util.isId(v) ? v : null;

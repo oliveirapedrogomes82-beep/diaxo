@@ -230,7 +230,7 @@ genéricas; logs só com método, rota, status e tempo.
 | `POST /api/invite/check`, `/api/invite/accept` | `{code}` / `{code, password}` (convite ou redefinição) |
 | `POST /api/consent` | aceite do aviso de privacidade (família) |
 | `GET /api/snapshot[?modo=familia]` | `{rev, me, data, reads}` |
-| `GET /api/changes?since=` | `{rev, changes, resync?}` |
+| `GET /api/changes?since=&boot=&readsSince=` | `{rev, now, changes, reads?, resync?}` (`reads`: novas visualizações da agenda para a equipe) |
 | `POST /api/cmd/:name` | `{input, requestId, password?}` → `{result, changes, rev, undoToken?, effects?}` |
 | `POST /api/undo` | `{token}` |
 | `POST /api/read` | `{itemIds}` registra "visualizado" (família) |
@@ -271,24 +271,24 @@ todos `turmas.gerenciar` + escopo `todas` para vínculos de pessoas, nunca sobre
 `staff.links {userId, classes: [{classId, role: regente|professor|auxiliar, subjectIds}], linkedStudentIds}` — `usuarios.gerenciar` + dominância.
 `me.update {phone}` (self).
 
-**Alunos e famílias** — `students.enroll` ✎ · `students.update {id, patch}` ✎ · `students.status {id, status}` ↶ · `students.delete {id}` (só sem histórico) ·
+**Alunos e famílias** — `students.enroll` ✎ (com `guardians[]` e `pickup[]`) · `students.update {id, patch}` ✎ (inclui `photo`: arquivo de imagem do autor) · `students.status {id, status}` ↶ · `students.delete {id}` (só sem histórico) ·
 `students.guardian.save {studentId, guardian}` ✎ · `students.guardian.remove {studentId, guardianId}` · `students.pickup.save` · `students.pickup.remove` —
 `alunos.cadastrar` + escopo (contatos exigem `alunos.contatos`; `alerts/health` exigem `alunos.saude`; `notes` exige `alunos.observacoes`; `fee/discount` exigem `financeiro.gerenciar`).
 `family.invite {studentId, guardianId}` (cria/vincula conta, devolve convite em `effects`) · `family.invites {classId}` (lote) ·
 `family.block {studentId, guardianId, blocked}` · `family.unlink {studentId, guardianId}` — `familias.acessos` + escopo.
 
-**Frequência e notas** — `attendance.save {classId, date, period, marks, content?, baseAt?}` (chamada.registrar + escopo + aula própria) ·
+**Frequência e notas** — `attendance.save {classId, date, period, marks, content?, reasons?, baseAt?}` (chamada.registrar + escopo + aula própria; `baseAt: null` = "abri antes de existir chamada", conflito se alguém salvou; `reasons` só com chamada.justificar, para J/A) ·
 `attendance.justify {classId, date, period?, studentId, mark: J|A|F, reason}` (chamada.justificar) ·
 `grades.set {studentId, subjectId|_parecer, term, value}` (notas.lancar + regra da disciplina + etapa aberta) ·
 `terms.update {term, closed?, released?}` (notas.fechar) · `councils.set {studentId, result, note}` (notas.fechar).
 
-**Agenda e rotina** — `diary.save` (diario.publicar; ocorrência exige diario.ocorrencias; autorização exige diario.autorizacoes) ·
-`diary.cancel {id|groupId, reason}` ↶ · `diary.approve {id}` (diario.aprovar) · `diary.release {id}` (system) ·
+**Agenda e rotina** — `diary.save` (diario.publicar, ou só diario.ocorrencias para ocorrências; autorização exige diario.autorizacoes; na edição o tipo é sempre o do item guardado) ·
+`diary.cancel {id|groupId, reason}` ↶ (publicado → cancelado, visível riscado à família; nunca publicado → apagado se for do autor, ou devolvido ao autor como rascunho com motivo) · `diary.approve {id}` (diario.aprovar) · `diary.release {id}` (system) ·
 `diary.ack {itemId, studentId, guardianId?, answer?, note?}` (família do aluno; ou diario.publicar + escopo com `origin: escola`) ·
 `routines.save {classId, date, entries: {studentId: {fields, bring, note}}}` · `routines.send {classId, date}` (diario.publicar + escopo).
 
 **Mensagens** — `messages.create {studentId, kind, subject, details, body, attachments}` (família do aluno, ou mensagens.responder) ·
-`messages.reply {id, body, kind?: texto|registro}` · `messages.status {id, status}`.
+`messages.reply {id, body, kind?: texto|registro}` (`registro` = nota interna da equipe: a família não vê e a situação não muda) · `messages.status {id, status}`.
 
 **Atendimentos** — `support.save` (atendimentos.registrar; edição só do autor) · `support.addendum {id, text}` (autor) ·
 `plans.save` · `plans.status` (atendimentos.registrar; autor ou atendimentos.conteudo) · `plans.ack {id}` (família).
