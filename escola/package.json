@@ -11,6 +11,6 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "demo": "node --disable-warning=ExperimentalWarning server/index.js --demo",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
-    "test:browser": "node tools/browser-tests.js"
+    "test:browser": "node tools/browser-tests.js && node tools/browser-tests.js --server"
   }
 }

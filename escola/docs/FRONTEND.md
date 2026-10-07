@@ -102,13 +102,18 @@ do campo. Por isso:
   `half` = metade, `third` = um terço; no celular tudo vira uma coluna) e chama `mount(el)` no elemento do
   widget. Widgets registrados até agora: `agenda-hoje`, `agenda-aprovacoes`, `agenda-autorizacoes-nao`,
   `agenda-pendente` (família), `alertas-saude`, `aniversariantes`, `chamadas-pendentes`, `faltas-seguidas`,
-  `notas-pendentes`, `equipe-acessos`.
+  `notas-pendentes`, `equipe-acessos`, `mensagens-abertas`, `mensagens-familia` (família), `atendimentos-recentes`,
+  `apoio-familia` (família: plano de apoio com "Li e estou ciente"), `proximos-eventos` e `comunicados-fixados`
+  (equipe e família), `financeiro-mes`.
 - **Ações compartilhadas já existentes** (chame com guarda `typeof Actions.x === 'function'`):
   `Actions.matricular({classId})`, `verAluno(id, aba?)`, `editarAluno(id)`, `convidarResponsavel(studentId, guardianId)`,
   `situacaoMatricula(id)`, `trocarTurma(id)`, `excluirAluno(id)`, `convidarFamilias(classId)`,
   `novaConta()`, `editarConta(id)`, `verPessoa(id)`, `novaTurma()`, `editarTurma(id)`,
   `fazerChamada(classId, {date, period})`, `justificarFalta(...)`, `abrirNotas(...)`,
-  `novoItemAgenda({classId, studentId, type})`, `verRespostasAgenda(itemId)`.
+  `novoItemAgenda({classId, studentId, type})`, `verRespostasAgenda(itemId)`,
+  `novaMensagem({studentId, kind?})` (equipe ou família), `abrirMensagem(id)`, `novoAtendimento({studentId})`,
+  `novoPlanoApoio({studentId})`, `abrirAtendimento(id)`, `novoEvento({date, classId, type})`, `verCalendario(date)`,
+  `novoComunicado()`, `receber(invoiceId)`, `gerarMensalidades()`.
 - **Consultas extras** (de `turmas.js`): `Q.canTakeLesson`, `Q.rollsToDo(date)` → `[{klass, missing}]`,
   `Q.rollState`, `Q.absenceStreaks`, `Q.absenceAlert`, `Q.studentAverage`, `Q.classStats`,
   `Q.subjectAttendance`, `Q.atRisk`, `Q.attendanceRecords`, `Q.homeroom`, `Q.gradeTone`.

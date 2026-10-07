@@ -2,9 +2,13 @@
 /* Testes de navegador (Playwright) na demonstração local: para cada conta de exemplo, abre todas as telas do
    menu, as abas da ficha de um aluno, a busca e cada ação do menu "Novo", em computador (1280) e celular (390).
    Falha se houver erro de JavaScript, erro no console, rolagem horizontal ou tela de erro.
-   Uso: npm run test:browser  [-- --only=Marcos] [-- --shots=pasta] */
+   Uso: npm run test:browser  [-- --only=Marcos] [-- --shots=pasta] [-- --server]
+   --server: sobe o servidor de demonstração (node server/index.js --demo) numa porta livre e testa pela API real. */
 const pw = require('./pw');
 const fs = require('node:fs');
+const net = require('node:net');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')));
 const ACCOUNTS = ['Ana Beatriz', 'Fernanda', 'Rita', 'Marcos', 'Aline', 'Bruna', 'Júlia', 'Paulo', 'Juliana'].filter((a) => !args.only || a.startsWith(args.only));
@@ -26,11 +30,34 @@ async function checkPage(s, who, vp, where) {
   if (args.shots) await s.shot(`${args.shots}/${who.split(' ')[0]}-${vp.width}-${where.replace(/[^a-z0-9]+/gi, '_')}.png`);
 }
 
+async function startServer() {
+  const port = await new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.listen(0, '127.0.0.1', () => {
+      const p = srv.address().port;
+      srv.close(() => resolve(p));
+    });
+  });
+  const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'server/index.js', '--demo'], { cwd: path.join(__dirname, '..'), env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' }, stdio: 'ignore' });
+  const url = `http://127.0.0.1:${port}/`;
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await fetch(url + 'api/health')).ok) break;
+    } catch (e) {
+      /* subindo */
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return { url, stop: () => child.kill('SIGTERM') };
+}
+
 (async () => {
   if (args.shots) fs.mkdirSync(args.shots, { recursive: true });
+  const server = args.server ? await startServer() : null;
+  if (server) process.on('exit', () => server.stop());
   for (const who of ACCOUNTS) {
     for (const vp of VIEWPORTS) {
-      const s = await pw.session(who, vp);
+      const s = await pw.session(who, server ? { ...vp, url: server.url } : vp);
       const routes = await s.page.$$eval('#nav a.side-link', (as) => as.map((a) => a.getAttribute('href').slice(1)));
       if (!routes.length) note(who, vp, 'menu', 'menu vazio');
       for (const r of routes) {
@@ -80,6 +107,7 @@ async function checkPage(s, who, vp, where) {
     }
   }
   await pw.done();
+  if (server) server.stop();
   if (problems.length) {
     console.log('\nPROBLEMAS:\n' + problems.join('\n'));
     process.exit(1);
