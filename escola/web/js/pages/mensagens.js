@@ -75,14 +75,32 @@
   };
 
   // ---------- conversas ----------
-  /** Conversas antigas carregadas pelo histórico (fora da janela do retrato), só leitura até a próxima resposta. */
-  const older = new Map();
-  const loadedHistory = new Set();
-  const findMessage = (id) => Q.message(id) || older.get(id) || null;
+  /** Conversas antigas carregadas pelo histórico (fora da janela do retrato), só leitura até a próxima resposta.
+      Presas à pessoa, ao modo e ao "ver como": trocar de conta (ou entrar na prévia) começa do zero, para nada
+      carregado por uma pessoa aparecer para outra na mesma aba. */
+  const hist = { owner: '', map: new Map(), done: new Set() };
+  const ownerKey = () => (me() ? `${me().id}|${Store.family ? 'f' : 'e'}|${Store.preview ? Store.preview.id : ''}` : '');
+  const histCache = () => {
+    const k = ownerKey();
+    if (hist.owner !== k) {
+      hist.owner = k;
+      hist.map = new Map();
+      hist.done = new Set();
+    }
+    return hist;
+  };
+  /** Só o que é de um aluno que a conta atual enxerga (o retrato é a autoridade). */
+  const olderMessages = () => [...histCache().map.values()].filter((m) => m && Q.student(m.studentId));
+  const findMessage = (id) => {
+    const m = Q.message(id);
+    if (m) return m;
+    const o = histCache().map.get(id);
+    return o && Q.student(o.studentId) ? o : null;
+  };
   const allMessages = () => {
     const list = Store.state.messages.slice();
     const ids = new Set(list.map((m) => m.id));
-    older.forEach((m, id) => !ids.has(id) && list.push(m));
+    olderMessages().forEach((m) => !ids.has(m.id) && list.push(m));
     return list;
   };
   const postsOf = (m) => (Store.family ? (m.posts || []).filter((p) => p.kind !== 'registro') : m.posts || []);
@@ -408,7 +426,7 @@
       const r2 = await UI.act('messages.status', { id: m.id, status: 'resolvida' });
       if (r2) UI.toast('Resposta enviada e conversa resolvida', { action: { label: 'Reabrir', fn: () => UI.act('messages.status', { id: m.id, status: 'respondida' }, { ok: 'Conversa reaberta' }) } });
     } else UI.toast(note ? 'Nota interna salva (só a equipe vê)' : Store.family ? 'Mensagem enviada à escola' : 'Resposta enviada à família', { ic: note ? 'lock' : 'send' });
-    if (older.has(m.id) && Q.message(m.id)) older.delete(m.id);
+    if (histCache().map.has(m.id) && Q.message(m.id)) histCache().map.delete(m.id);
     App.render();
   };
 
@@ -1096,7 +1114,7 @@
                 return html`<li><a class="mg-sitem" href="#mensagens/${m.id}">${kindIcon(m.kind, 'sm')}<span class="mg-item-main"><span class="mg-item-top"><b class="mg-item-who">${m.subject || kindOf(m.kind).label}</b><span class="mg-time">${at(lastAt(m))}</span></span><span class="mg-snippet">${p && p.kind === 'registro' ? icon('lock') : ''}${snippet(m)}</span></span>${statusPill(m)}</a></li>`;
               })}</ul>`
             : html`<p class="muted small">Nenhuma conversa com a família nos últimos ${WINDOW_DAYS} dias.</p>`}
-            <div class="mg-shist">${loadedHistory.has(key) ? html`<span class="small muted">Conversas antigas carregadas.</span>` : html`<button type="button" class="btn ghost sm" data-mg-shist>${icon('history')}Carregar conversas com mais de ${WINDOW_DAYS} dias</button>`}</div>
+            <div class="mg-shist">${histCache().done.has(key) ? html`<span class="small muted">Conversas antigas carregadas.</span>` : html`<button type="button" class="btn ghost sm" data-mg-shist>${icon('history')}Carregar conversas com mais de ${WINDOW_DAYS} dias</button>`}</div>
           </div>
         </section>
       </div>`;
@@ -1109,9 +1127,13 @@
           h.disabled = true;
           h.classList.add('loading');
           try {
+            const owner = ownerKey();
             const r = await Api.history('messages', { studentId: s.id, before: windowStart(), limit: 100 });
-            (r.items || []).forEach((it) => !Q.message(it.id) && older.set(it.id, it.value));
-            loadedHistory.add('s|' + s.id);
+            // a pessoa saiu ou trocou de conta enquanto o pedido estava no caminho: descarta
+            if (ownerKey() !== owner) return;
+            const h = histCache();
+            (r.items || []).forEach((it) => it && it.value && it.value.studentId === s.id && !Q.message(it.id) && h.map.set(it.id, it.value));
+            h.done.add('s|' + s.id);
             UI.toast(r.items && r.items.length ? `${U.plural(r.items.length, 'conversa antiga carregada', 'conversas antigas carregadas')}` : 'Não há conversas mais antigas.', { ic: 'history' });
           } catch (err) {
             UI.errorToast(err);

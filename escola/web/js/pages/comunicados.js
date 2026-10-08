@@ -62,7 +62,9 @@
   };
   const LONG = 420;
   const isLong = (n) => (n.body || '').length > LONG || (n.body || '').split('\n').length > 7;
-  const shareText = (n) => `*${n.title}*\n${Q.settings().schoolName || ''}\n\n${n.body}`;
+  /** Comunicado só para a equipe: nunca vai às famílias, então não ganha atalho para fora do sistema. */
+  const isInternal = (n) => !!(n.audience && n.audience.who === 'equipe');
+  const shareText = (n) => `*${n.title}*\n${Q.settings().schoolName || ''}${isInternal(n) ? '\n_Comunicado interno — só para a equipe da escola_' : ''}\n\n${n.body}`;
   const edited = (n) => n.updatedAt && n.createdAt && Date.parse(n.updatedAt) - Date.parse(n.createdAt) > 60000;
 
   const card = (n, st, seen) => {
@@ -82,8 +84,8 @@
       ${long ? html`<div><button type="button" class="link small" data-co-more="${n.id}" aria-expanded="${open ? 'true' : 'false'}" aria-controls="co-body-${n.id}">${open ? 'Mostrar menos' : 'Ler o comunicado inteiro'}</button></div>` : ''}
       ${staff
         ? html`<div class="btn-row co-acts">
-            <button type="button" class="btn sm" data-co-copy="${n.id}">${icon('copy')}Copiar texto</button>
-            <a class="btn sm" href="${U.whatsappLink('', shareText(n))}" target="_blank" rel="noopener noreferrer">${icon('message')}Enviar no WhatsApp</a>
+            <button type="button" class="btn sm" data-co-copy="${n.id}">${icon(isInternal(n) ? 'lock' : 'copy')}Copiar texto</button>
+            ${isInternal(n) ? '' : html`<a class="btn sm" href="${U.whatsappLink('', shareText(n))}" target="_blank" rel="noopener noreferrer">${icon('message')}Enviar no WhatsApp</a>`}
             ${manage
               ? html`<span class="grow"></span>
                 <button type="button" class="btn sm ghost" data-co-pin="${n.id}" aria-pressed="${n.pinned ? 'true' : 'false'}">${icon('pin')}${n.pinned ? 'Desafixar' : 'Fixar no topo'}</button>
@@ -197,7 +199,14 @@
       }
       const n = notice(d.coCopy || d.coPin || d.coEdit || d.coDel || '');
       if (!n) return;
-      if (d.coCopy) return UI.copy(shareText(n), 'Texto copiado. Cole onde quiser.');
+      if (d.coCopy) {
+        if (!isInternal(n)) return UI.copy(shareText(n), 'Texto copiado. Cole onde quiser.');
+        return UI.confirm({
+          title: 'Copiar um comunicado interno?',
+          text: 'Este comunicado é só para a equipe e não aparece para as famílias. Cole o texto apenas em conversas da equipe da escola.',
+          ok: 'Copiar mesmo assim',
+        }).then((go) => go && UI.copy(shareText(n), 'Texto copiado (comunicado interno, só para a equipe).'));
+      }
       if (d.coEdit) return openNotice({ id: n.id });
       if (d.coPin) return UI.act('notices.pin', { id: n.id, pinned: !n.pinned }, { btn: b, ok: n.pinned ? 'Comunicado desafixado' : 'Comunicado fixado no topo' });
       if (d.coDel) return UI.act('notices.delete', { id: n.id }, { btn: b, ok: `Comunicado “${n.title}” excluído` });

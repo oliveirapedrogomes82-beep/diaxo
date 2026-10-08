@@ -409,8 +409,10 @@
         const sid = h.dataset.roHist;
         const days = daysOf(Q.student(sid) || { id: sid });
         const oldest = days.length ? days[days.length - 1].date : today();
+        const owner = cache().owner;
         try {
           const r = await Api.history('routines', { studentId: sid, before: oldest, limit: 30 });
+          if (cache().owner !== owner) return; // trocou de conta enquanto carregava: descarta
           for (const x of r.items || []) if (x && x.id && x.value) cache().map.set(x.id, x.value);
           cache().done.add(`r|${sid}`);
           Store.emit();

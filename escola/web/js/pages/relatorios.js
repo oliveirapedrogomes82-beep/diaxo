@@ -297,18 +297,19 @@
   const loadYear = async () => {
     const key = histKey();
     if (hist.key === key && (hist.loading || hist.done)) return;
-    hist = { key, items: new Map(), loading: true, done: false, error: '' };
+    const h = (hist = { key, items: new Map(), loading: true, done: false, error: '' });
     const start = `${Q.year()}-01-01`;
     try {
       let before = U.addDays(today(), -58);
       for (let i = 0; i < 40; i++) {
         const r = await Api.history('diary', { before, limit: 500 });
+        if (hist !== h) return; // outra pessoa (ou outra prévia) começou a carregar: este pedido não vale mais
         const items = (r && r.items) || [];
         let oldest = before;
         let added = 0;
         for (const it of items) {
-          if (!hist.items.has(it.id)) {
-            hist.items.set(it.id, it.value);
+          if (!h.items.has(it.id)) {
+            h.items.set(it.id, it.value);
             added++;
           }
           if (it.date && it.date < oldest) oldest = it.date;
@@ -317,12 +318,12 @@
         before = added ? U.addDays(oldest, 1) : oldest;
         if (!added && oldest === before) break;
       }
-      hist.done = true;
+      h.done = true;
     } catch (err) {
-      hist.error = (err && err.message) || 'Não foi possível carregar o histórico.';
+      h.error = (err && err.message) || 'Não foi possível carregar o histórico.';
     } finally {
-      hist.loading = false;
-      if (hist.key === key && App.route()[0] === 'relatorios') App.render();
+      h.loading = false;
+      if (hist === h && App.route()[0] === 'relatorios') App.render();
     }
   };
   const occSince = (p) => (p === 'ano' ? `${Q.year()}-01-01` : U.addDays(today(), -Number(p)));

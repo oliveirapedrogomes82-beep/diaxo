@@ -1029,7 +1029,21 @@
   // =====================================================================
   // Aba "Financeiro" da ficha do aluno
   // =====================================================================
-  const olderCache = new Map(); // studentId → {loading, items, error}
+  /** studentId → {loading, done, items}. Preso à pessoa e ao "ver como": trocar de conta na mesma aba começa do zero. */
+  const olderStore = { owner: '', map: new Map() };
+  const olderOwner = () => (me() ? `${me().id}|${Store.preview ? Store.preview.id : ''}` : '');
+  const olderMap = () => {
+    if (olderStore.owner !== olderOwner()) {
+      olderStore.owner = olderOwner();
+      olderStore.map = new Map();
+    }
+    return olderStore.map;
+  };
+  const olderCache = {
+    get: (sid) => olderMap().get(sid),
+    set: (sid, v) => olderMap().set(sid, v),
+    delete: (sid) => olderMap().delete(sid),
+  };
   const renderStudentTab = (s) => {
     const T = today();
     const list = Q.studentInvoices(s.id);
@@ -1072,13 +1086,16 @@
       if (e.target.closest('[data-fi-snew]')) return newCharge({ studentId: s.id });
       const b = e.target.closest('[data-fi-older]');
       if (!b) return;
+      const owner = olderOwner();
       olderCache.set(s.id, { loading: true });
       b.disabled = true;
       b.classList.add('loading');
       try {
         const r = await Api.history('invoices', { studentId: s.id, before: `${Q.year()}-01-01`, limit: 200 });
-        olderCache.set(s.id, { done: true, items: (r.items || []).map((x) => x.value) });
+        if (olderOwner() !== owner) return; // trocou de conta enquanto carregava
+        olderCache.set(s.id, { done: true, items: (r.items || []).map((x) => x.value).filter((x) => x && x.studentId === s.id) });
       } catch (err) {
+        if (olderOwner() !== owner) return;
         olderCache.delete(s.id);
         UI.errorToast(err);
       }

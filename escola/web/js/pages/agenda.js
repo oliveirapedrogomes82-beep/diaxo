@@ -124,9 +124,11 @@
     return list.concat([...h.items.values()].filter((d) => !have.has(d.id)));
   };
   const loadHistory = async (params, key) => {
-    const h = cache();
+    const owner = ownerKey();
     try {
       const r = await Api.history('diary', { limit: 200, ...params });
+      if (ownerKey() !== owner) return null; // trocou de conta (ou de prévia) enquanto carregava: descarta
+      const h = cache();
       for (const x of r.items || []) if (x && x.value && x.value.id) h.items.set(x.value.id, { ...x.value, _old: true });
       if (key) h.done.add(key);
       Store.emit();
