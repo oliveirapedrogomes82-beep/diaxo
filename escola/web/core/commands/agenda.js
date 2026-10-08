@@ -51,22 +51,26 @@
       if (type === 'ocorrencia') ctx.need('diario.ocorrencias');
       else ctx.need('diario.publicar');
       if (type === 'autorizacao') ctx.need('diario.autorizacoes');
-      const title = V.str(input.title, 'Título', { required: true, max: 140 });
-      const body = V.text(input.body, 'Texto', { required: type !== 'lembrete', max: 5000 });
-      const date = V.date(input.date || env.today, 'Data', { required: true });
-      const due = V.date(input.due, type === 'dever' ? 'Entrega' : 'Data do lembrete');
-      const respondBy = type === 'autorizacao' ? V.date(input.respondBy, 'Responder até', { required: true }) : null;
+      // edição parcial: campo que não veio mantém o valor guardado (contrato §2) — nunca "zera" sigilo, prazo ou data
+      const sent = (k) => Object.prototype.hasOwnProperty.call(input, k);
+      const val = (k) => (existing && !sent(k) ? existing[k] : input[k]);
+      const title = V.str(val('title'), 'Título', { required: true, max: 140 });
+      const body = V.text(val('body'), 'Texto', { required: type !== 'lembrete', max: 5000 });
+      const date = V.date(val('date') || env.today, 'Data', { required: true });
+      const due = V.date(val('due'), type === 'dever' ? 'Entrega' : 'Data do lembrete');
+      const respondBy = type === 'autorizacao' ? V.date(val('respondBy'), 'Responder até', { required: true }) : null;
       if (respondBy && !existing && respondBy < env.today) fail('invalid', 'O prazo para responder já passou. Escolha uma data a partir de hoje.', 'respondBy');
-      const category = type === 'ocorrencia' ? V.oneOf(input.category || 'comportamento', 'Categoria', CATEGORIES) : null;
-      const internal = type === 'ocorrencia' ? V.bool(input.internal) : false;
-      const requireAck = type === 'autorizacao' || (type === 'ocorrencia' && !internal) ? true : V.bool(input.requireAck);
+      const category = type === 'ocorrencia' ? V.oneOf(val('category') || 'comportamento', 'Categoria', CATEGORIES) : null;
+      const internal = type === 'ocorrencia' ? V.bool(val('internal')) : false;
+      const requireAck = type === 'autorizacao' || (type === 'ocorrencia' && !internal) ? true : V.bool(val('requireAck'));
       let publishAt = null;
-      if (input.publishAt) {
-        if (typeof input.publishAt !== 'string' || isNaN(Date.parse(input.publishAt)) || !input.publishAt.endsWith('Z')) fail('invalid', 'Horário de envio inválido.');
-        publishAt = new Date(input.publishAt).toISOString();
+      const rawPublishAt = val('publishAt');
+      if (rawPublishAt) {
+        if (typeof rawPublishAt !== 'string' || isNaN(Date.parse(rawPublishAt)) || !rawPublishAt.endsWith('Z')) fail('invalid', 'Horário de envio inválido.');
+        publishAt = new Date(rawPublishAt).toISOString();
         if (publishAt <= env.now) publishAt = null;
       }
-      const draft = V.bool(input.draft);
+      const draft = existing && !sent('draft') ? existing.status === 'rascunho' : V.bool(input.draft);
       const needsApproval = st.diaryApproval && !ctx.can('diario.aprovar') && !internal;
       const status = draft ? 'rascunho' : needsApproval ? 'pendente' : publishAt ? 'agendado' : 'publicado';
 
@@ -78,6 +82,8 @@
         if (cur.status === 'cancelado') fail('conflict', 'Este item foi cancelado.');
         const answered = hasAnswers(tx, cur.id);
         if (cur.type === 'autorizacao' && answered) fail('conflict', 'Esta autorização já tem respostas. Cancele e envie uma nova.');
+        // com aprovação da coordenação, o que já foi publicado não muda sem passar por ela de novo
+        if (st.diaryApproval && cur.status === 'publicado' && !cur.internal && !ctx.can('diario.aprovar')) fail('conflict', 'Com a aprovação da coordenação ligada, um item já publicado só pode ser alterado pela coordenação. Cancele e envie um novo, ou peça a correção.');
         const subjectId = input.subjectId && input.subjectId in (tx.get('classes', cur.classId) || {}).subjects ? input.subjectId : cur.subjectId;
         const attachments = attachGroupFiles(tx, ctx, input.attachments ?? cur.attachments, cur);
         X.releaseFiles(tx, cur.attachments, attachments, { coll: 'diary', id: cur.id });

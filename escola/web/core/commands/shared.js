@@ -64,8 +64,9 @@
     const code = util.tempPassword().replace('-', '').toUpperCase();
     const pretty = code.slice(0, 5) + '-' + code.slice(5);
     const expiresAt = new Date(Date.parse(env.now) + 72 * 3600 * 1000).toISOString();
-    tx.effect({ type: 'invite', userId, code: pretty, expiresAt, purpose });
-    return { code: pretty, expiresAt };
+    const effect = { type: 'invite', userId, code: pretty, expiresAt, purpose };
+    tx.effect(effect);
+    return effect; // {code, expiresAt, …}: quem chama pode marcar detalhes (ex.: existing)
   };
   const endSessionsEffect = (tx, userId) => tx.effect({ type: 'endSessions', userId });
 

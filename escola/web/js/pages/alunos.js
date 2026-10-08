@@ -765,7 +765,8 @@
       invitedNow.set(ef.userId, ef.expiresAt);
       Store.emit();
       UI.showInvite(ef, { name: g.name, phone: g.phone, email: g.email });
-    } else UI.toast(`${U.firstName(g.name)} já tem uma conta da equipe: o Portal da família foi vinculado a ela.`);
+    } else if ((res.effects || []).some((x) => x.type === 'linked')) UI.toast(`${U.firstName(g.name)} já tinha uma conta no Portal da família (de outro filho): este aluno foi vinculado a ela. É só entrar com a senha de sempre.`, { ms: 7000 });
+    else UI.toast(`${U.firstName(g.name)} já tem uma conta da equipe: o Portal da família foi vinculado a ela.`);
     return res;
   };
 
@@ -1069,8 +1070,9 @@
           if (!res) return;
           api.close();
           const effects = (res.effects || []).filter((x) => x.type === 'invite');
+          const linked = (res.effects || []).filter((x) => x.type === 'linked').length;
           if (!effects.length) {
-            UI.toast('Nenhum convite novo: todos os responsáveis desta turma já foram convidados ou faltam contatos.');
+            UI.toast(linked ? `${U.plural(linked, 'responsável já tinha conta e foi vinculado', 'responsáveis já tinham conta e foram vinculados')} (entram com a senha de sempre). Nenhum código novo.` : 'Nenhum convite novo: todos os responsáveis desta turma já foram convidados ou faltam contatos.', { ms: 7000 });
             return;
           }
           showInviteSheet(effects, Q.klass(cid));

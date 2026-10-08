@@ -272,10 +272,21 @@
     if (!g.phone && !g.email) fail('invalid', `Cadastre o celular ou o e-mail de ${g.name} antes de convidar.`);
     if (g.bloqueado) fail('conflict', `${g.name} está com o acesso bloqueado.`);
     let user = g.userId ? tx.get('users', g.userId) : null;
+    let matched = false;
     if (!user) {
       const d = util.digits(g.phone);
       user = tx.list('users').find((u) => (d && util.digits(u.phone) === d) || (g.email && u.email && u.email.toLowerCase() === g.email.toLowerCase())) || null;
       if (user && user.role !== 'responsavel' && user.status !== 'ativo') fail('conflict', 'Já existe uma conta inativa com esse contato. Fale com a direção.');
+      matched = !!user;
+    }
+    // ninguém se vincula como responsável para ganhar o Portal da família de um aluno
+    if (user && user.id === ctx.user.id) fail('forbidden', 'Você não pode vincular a sua própria conta como responsável. Peça a outra pessoa da escola.');
+    // código para uma conta de família que já existe: quem gera precisa alcançar todos os filhos dessa conta
+    if (user && user.role === 'responsavel') {
+      for (const sid of perms.guardianOf(user, tx.state)) {
+        const kid = tx.get('students', sid);
+        if (kid && kid.id !== s.id && !perms.reachesStudent(ctx, kid)) fail('forbidden', `${user.name} também é responsável por alunos que você não acessa. Peça à secretaria para gerar o código.`);
+      }
     }
     if (!user) {
       user = { id: env.newId('u'), name: g.name, title: '', role: 'responsavel', email: g.email || '', phone: g.phone || '', status: 'ativo', login: true, validUntil: null, grants: [], revokes: [], scope: 'vinculos', segments: [], classIds: [], linkedStudentIds: [], subjectIds: [], area: null, createdAt: env.now };
@@ -291,6 +302,8 @@
     if (issued && issued.has(user.id)) return { userId: user.id, code: null };
     if (issued) issued.add(user.id);
     const inv = X.inviteEffect(tx, user.id, env, purpose);
+    // conta encontrada pelo contato: se ela já tem senha, o servidor só vincula (não gera código que troque a senha dela)
+    if (matched) inv.existing = true;
     if (purpose === 'convite') tx.effect({ type: 'notifyGuardians', studentId: s.id, reason: 'novo acesso', except: user.id });
     return { userId: user.id, code: inv.code };
   };

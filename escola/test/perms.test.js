@@ -140,3 +140,41 @@ test('ver como: equipe dominada ou família dos alunos que o ator alcança', () 
   assert.ok(!perms.canPreview(prof, fam, st), 'professor não tem familias.acessos');
   assert.ok(!perms.canPreview(who(st, 'Paulo'), fam, st));
 });
+
+test('convite da família: ninguém vincula a própria conta; código só para quem alcança todos os filhos da conta', () => {
+  const st = fresh();
+  const aux = addStaff(st, { role: 'aux_secretaria', name: 'Aux Sec', email: 'aux@escola.test', phone: '(11) 90000-1111' });
+  const s = st.students.find((x) => x.status === 'ativo' && x.classId);
+  const g = run(st, aux, 'students.guardian.save', { studentId: s.id, guardian: { name: 'Eu Mesma', relation: 'Outro', email: 'aux@escola.test' } }).result.id;
+  fails(st, aux, 'family.invite', { studentId: s.id, guardianId: g }, 'forbidden');
+  // professor com acesso às famílias da turma dele não gera código para uma família que tem filho em outra turma
+  const fam = family(st);
+  const kids = st.students.filter((k) => k.guardians.some((x) => x.userId === fam.id));
+  const prof = addStaff(st, { role: 'professor', name: 'Prof Escopo', email: 'pe@escola.test', scope: 'vinculos', classIds: [kids[0].classId], grants: ['familias.acessos'] });
+  if (kids.some((k) => k.classId !== kids[0].classId)) {
+    const gid = kids[0].guardians.find((x) => x.userId === fam.id).id;
+    fails(st, prof, 'family.invite', { studentId: kids[0].id, guardianId: gid }, 'forbidden');
+  }
+  // conta encontrada pelo contato é marcada como existente (o servidor só vincula se ela já tiver senha)
+  const other = st.students.find((k) => k.status === 'ativo' && !k.guardians.some((x) => x.userId === fam.id));
+  const famPhone = fam.phone;
+  const gid2 = run(st, who(st, 'Rita'), 'students.guardian.save', { studentId: other.id, guardian: { name: fam.name, relation: 'Mãe', phone: famPhone } }).result.id;
+  const out = run(st, who(st, 'Rita'), 'family.invite', { studentId: other.id, guardianId: gid2 });
+  assert.equal(out.result.id, fam.id);
+  assert.ok(out.effects.some((e) => e.type === 'invite' && e.existing === true));
+});
+
+test('ver como: só o que o ator também pode ver', () => {
+  const st = fresh();
+  const coord = who(st, 'Fernanda'); // familias.acessos, sem financeiro.ver
+  const fam = family(st);
+  const p = Core.view.preview(st, coord, fam, {});
+  assert.equal(p.data.invoices.length, 0, 'sem financeiro.ver, não vê mensalidades da família');
+  assert.ok(p.data.students.every((s) => s.fee === undefined));
+  const dir = who(st, 'Ana Beatriz');
+  const psi = who(st, 'Júlia');
+  const own = Core.view.snapshot(st, dir, {});
+  const pv = Core.view.preview(st, dir, psi, {});
+  assert.equal(pv.data.support.length, own.data.support.length, 'diretora não vê atendimentos nem pelo "ver como"');
+  assert.ok(pv.data.plans.every((pl) => { const mine = own.data.plans.find((x) => x.id === pl.id); return mine && Object.keys(pl).every((k) => k in mine); }));
+});

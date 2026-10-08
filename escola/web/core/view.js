@@ -186,8 +186,9 @@
         if (!env.history && y !== year) return null;
         if (ctx.family) {
           if (!ctx.studentIds.has(sid)) return null;
-          const t = String(term).replace(/^rec/, '');
-          if (term !== 'rf' && !rules.termReleased(settings, y, t)) return null;
+          // recuperação final só aparece quando a última etapa do ano foi liberada
+          const t = term === 'rf' ? String(Number(settings.termCount) || 4) : String(term).replace(/^rec/, '');
+          if (!rules.termReleased(settings, y, t)) return null;
           return v;
         }
         if (!can('notas.ver')) return null;
@@ -343,6 +344,54 @@
     return { me: me(state, user, env), data };
   }
 
+  /** Interseção de duas versões filtradas do mesmo dado: só fica o que as duas pessoas podem ver. */
+  const intersect = (t, a) => {
+    if (Array.isArray(t) && Array.isArray(a)) {
+      if (t.length && t.every((x) => x && typeof x === 'object' && 'id' in x)) {
+        const byId = new Map(a.filter((x) => x && typeof x === 'object').map((x) => [x.id, x]));
+        return t.filter((x) => byId.has(x.id)).map((x) => intersect(x, byId.get(x.id)));
+      }
+      return t;
+    }
+    if (t && a && typeof t === 'object' && typeof a === 'object' && !Array.isArray(t) && !Array.isArray(a)) {
+      const out = {};
+      for (const k of Object.keys(t)) {
+        if (k === '_hidden') out._hidden = [...new Set([...(t._hidden || []), ...(a._hidden || [])])];
+        else if (k in a) out[k] = intersect(t[k], a[k]);
+      }
+      return out;
+    }
+    return t;
+  };
+
+  /**
+   * "Ver como": o retrato da pessoa-alvo, mas só com o que o ATOR também pode ver
+   * (nunca revela, por exemplo, atendimentos ou mensalidades a quem não tem esse acesso).
+   */
+  function preview(state, actor, target, env = {}, actorEnv = env) {
+    const t = snapshot(state, target, env);
+    const { filter } = makeFilter(state, actor, actorEnv);
+    const data = {};
+    for (const [coll, kind] of Object.entries(KINDS)) {
+      if (kind === 'single') data[coll] = t.data[coll];
+      else if (kind === 'list') {
+        const raw = new Map(state[coll].map((d) => [d.id, d]));
+        data[coll] = [];
+        for (const doc of t.data[coll]) {
+          const mine = filter(coll, doc.id, raw.get(doc.id));
+          if (mine) data[coll].push(intersect(doc, mine));
+        }
+      } else {
+        data[coll] = {};
+        for (const k of Object.keys(t.data[coll])) {
+          const mine = filter(coll, k, state[coll][k]);
+          if (mine != null) data[coll][k] = intersect(t.data[coll][k], mine);
+        }
+      }
+    }
+    return { me: t.me, data };
+  }
+
   /**
    * Filtra mudanças para um usuário: visível → "put" recortado; era visível e deixou de ser (ou foi apagado) → "del".
    * `befores` = imagens anteriores do motor (avaliadas com as regras de agora; só podem gerar remoções).
@@ -398,5 +447,5 @@
     return { items: out.slice(0, lim), more: out.length > lim };
   }
 
-  return { makeFilter, snapshot, visibleChanges, history, me, WINDOW_DAYS };
+  return { makeFilter, snapshot, preview, visibleChanges, history, me, WINDOW_DAYS };
 });

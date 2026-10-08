@@ -11,21 +11,25 @@
     if (!ctx.all && doc.authorId !== ctx.user.id) fail('forbidden', 'Você só pode alterar o que você publicou.');
   };
 
+  /** Na edição, campo que não veio mantém o valor guardado (contrato §2): nunca "abre" um público restrito por omissão. */
+  const fieldsOf = (input, cur) => (k) => (cur && !Object.prototype.hasOwnProperty.call(input, k) ? cur[k] : input[k]);
+
   E.define('events.save', {
     perm: 'calendario.editar',
     run(tx, input, ctx, env) {
+      const cur = input.id ? tx.need('events', input.id, 'Evento') : null;
+      if (cur) ownOrAll(ctx, cur);
+      const f = fieldsOf(input, cur);
       const data = {
-        title: V.str(input.title, 'Título', { required: true, max: 120 }),
-        type: V.oneOf(input.type, 'Tipo', EVENT_TYPES),
-        date: V.date(input.date, 'Data', { required: true }),
-        time: V.time(input.time, 'Horário'),
-        audience: X.audienceFrom(tx, ctx, input.audience),
-        notes: V.text(input.notes, 'Detalhes', { max: 2000 }),
+        title: V.str(f('title'), 'Título', { required: true, max: 120 }),
+        type: V.oneOf(f('type'), 'Tipo', EVENT_TYPES),
+        date: V.date(f('date'), 'Data', { required: true }),
+        time: V.time(f('time'), 'Horário'),
+        audience: cur && !Object.prototype.hasOwnProperty.call(input, 'audience') ? cur.audience : X.audienceFrom(tx, ctx, input.audience),
+        notes: V.text(f('notes'), 'Detalhes', { max: 2000 }),
       };
       if (data.type === 'feriado' && !ctx.all) fail('forbidden', 'Só quem enxerga todas as turmas marca feriados.');
-      if (input.id) {
-        const cur = tx.need('events', input.id, 'Evento');
-        ownOrAll(ctx, cur);
+      if (cur) {
         tx.put('events', { ...cur, ...data });
         tx.summary = `Evento "${data.title}" atualizado`;
         tx.audit = { entity: 'events', ids: [cur.id] };
@@ -55,18 +59,17 @@
   E.define('notices.save', {
     perm: 'comunicados.publicar',
     run(tx, input, ctx, env) {
+      const cur = input.id ? tx.need('notices', input.id, 'Comunicado') : null;
+      if (cur) ownOrAll(ctx, cur);
+      const f = fieldsOf(input, cur);
       const data = {
-        title: V.str(input.title, 'Título', { required: true, max: 140 }),
-        body: V.text(input.body, 'Mensagem', { required: true, max: 5000 }),
-        audience: X.audienceFrom(tx, ctx, input.audience),
-        pinned: V.bool(input.pinned),
+        title: V.str(f('title'), 'Título', { required: true, max: 140 }),
+        body: V.text(f('body'), 'Mensagem', { required: true, max: 5000 }),
+        audience: cur && !Object.prototype.hasOwnProperty.call(input, 'audience') ? cur.audience : X.audienceFrom(tx, ctx, input.audience),
+        pinned: V.bool(f('pinned')),
       };
-      if (input.id) {
-        const cur = tx.need('notices', input.id, 'Comunicado');
-        ownOrAll(ctx, cur);
+      if (cur) {
         if (input.baseUpdatedAt && cur.updatedAt !== input.baseUpdatedAt) fail('conflict', 'Este comunicado foi alterado enquanto você editava. Abra de novo para ver a versão atual.');
-        // edição: "fixado" ausente na entrada mantém o valor guardado (contrato: campos ausentes não mudam)
-        if (!Object.prototype.hasOwnProperty.call(input, 'pinned')) data.pinned = !!cur.pinned;
         tx.put('notices', { ...cur, ...data, updatedAt: env.now });
         tx.summary = `Comunicado "${data.title}" atualizado`;
         tx.audit = { entity: 'notices', ids: [cur.id] };

@@ -161,3 +161,17 @@ test('mensagens: nota interna da equipe ("registro") nunca vai para a família',
   assert.ok(seen.posts.every((p) => p.kind !== 'registro'));
   assert.equal(snapshot(st, sec).data.messages.find((x) => x.id === m.result.id).posts.length, 2);
 });
+
+test('recuperação final só aparece para a família com a última etapa liberada', () => {
+  const st = fresh();
+  const fam = family(st);
+  const kid = kidsOf(st, fam).find((s) => Core.rules.evaluation(st.settings, st.classes.find((c) => c.id === s.classId)) === 'nota');
+  const klass = st.classes.find((c) => c.id === kid.classId);
+  const sub = Object.keys(klass.subjects)[0];
+  const coord = who(st, 'Fernanda');
+  run(st, coord, 'grades.set', { studentId: kid.id, subjectId: sub, term: 'rf', value: 2.5 });
+  const key = `2026|${kid.id}|${sub}|rf`;
+  assert.equal(snapshot(st, fam).data.grades[key], undefined);
+  run(st, coord, 'terms.update', { term: 4, closed: true, released: true });
+  assert.equal(snapshot(st, fam).data.grades[key], 2.5);
+});

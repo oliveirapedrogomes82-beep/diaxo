@@ -347,6 +347,10 @@ const Api = (() => {
         if (ef.type === 'invite') {
           const clean = ef.code.replace(/[^A-Z0-9]/g, '');
           const purpose = ef.purpose === 'redefinicao' && !creds[ef.userId] ? 'convite' : ef.purpose;
+          if (ef.existing && creds[ef.userId]) {
+            shown.push({ type: 'linked', userId: ef.userId });
+            continue;
+          }
           // um código novo invalida os anteriores da mesma conta (como no servidor)
           for (const [k, inv] of Object.entries(invites)) if (inv.userId === ef.userId && !inv.usedAt) delete invites[k];
           invites[clean] = { userId: ef.userId, purpose, expiresAt: ef.expiresAt, usedAt: null };
@@ -631,7 +635,7 @@ const Api = (() => {
         const target = user(userId);
         if (!target || Perms.isFamily(u) || !Perms.canPreview(u, target, state)) fail('not_found', 'Pessoa não encontrada.', 404);
         addAudit(u, 'preview', `Visualizou o sistema como ${target.name}`, { entity: 'users', ids: [target.id] });
-        const snap = View.snapshot(state, target, env());
+        const snap = View.preview(state, u, target, env(), viewEnv());
         return clone({ rev, me: snap.me, data: snap.data, reads: {}, preview: true });
       },
       async uploadFile(file) {

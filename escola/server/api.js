@@ -404,6 +404,11 @@ class Api {
         const clean = e.code.replace(/[^A-Z0-9]/g, '');
         const cred = this.db.getCredentials(e.userId);
         const purpose = e.purpose === 'redefinicao' && !(cred && cred.hash) ? 'convite' : e.purpose; // quem nunca criou senha recebe "primeiro acesso"
+        // conta de família encontrada pelo contato e que já tem senha: só vincula, sem código (ninguém troca a senha dela por aqui)
+        if (e.existing && cred && cred.hash) {
+          shown.push({ type: 'linked', userId: e.userId });
+          continue;
+        }
         invites.push({ codeHash: auth.sha256('invite:' + clean), userId: e.userId, purpose, expiresAt: e.expiresAt });
         shown.push({ type: 'invite', userId: e.userId, code: e.code, expiresAt: e.expiresAt, purpose, link: `${this.config.publicUrl || ''}/#acesso/${e.code}` });
       } else if (e.type === 'endSessions' && (!s || e.userId !== s.user.id)) endSessions.push(e.userId);
@@ -519,7 +524,7 @@ class Api {
     const target = this.user(userId);
     if (!target || Perms.isFamily(s.user) || !Perms.canPreview(s.user, target, this.state)) throw new HttpError(404, 'not_found', 'Pessoa não encontrada.');
     this.audit(s, 'preview', `Visualizou o sistema como ${target.name}`, { entity: 'users', ids: [target.id] }, req);
-    const snap = View.snapshot(this.state, target, this.env());
+    const snap = View.preview(this.state, s.user, target, this.env(), this.viewEnv(s));
     return sendJSON(req, res, 200, { rev: this.db.rev, me: snap.me, data: snap.data, reads: {}, preview: true });
   }
 

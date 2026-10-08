@@ -252,3 +252,34 @@ test('configurações: lista branca (nunca perfis, titular ou demonstração)', 
   assert.equal(st.settings.passing, 6);
   fails(st, who(st, 'Marcos'), 'settings.update', { patch: { schoolName: 'X' } }, 'forbidden');
 });
+
+test('edição parcial nunca zera sigilo, prazo, data ou público', () => {
+  const st = fresh();
+  const coord = who(st, 'Fernanda');
+  const fam = family(st);
+  const kid = kidsOf(st, fam)[0];
+  const oc = run(st, coord, 'diary.save', { type: 'ocorrencia', category: 'comportamento', internal: true, classIds: [kid.classId], studentIds: [kid.id], title: 'Interno', body: 'Só equipe' });
+  run(st, coord, 'diary.save', { id: oc.result.id, title: 'Interno (corrigido)' });
+  assert.equal(st.diary.find((d) => d.id === oc.result.id).internal, true);
+  const dv = run(st, coord, 'diary.save', { type: 'dever', classIds: [kid.classId], title: 'Lição', body: 'p. 10', date: '2026-10-05', due: '2026-10-09' });
+  run(st, coord, 'diary.save', { id: dv.result.id, body: 'p. 10 e 11' });
+  const d = st.diary.find((x) => x.id === dv.result.id);
+  assert.equal(d.due, '2026-10-09');
+  assert.equal(d.date, '2026-10-05');
+  const n = run(st, coord, 'notices.save', { title: 'Interno', body: 'Equipe', audience: { who: 'equipe' } });
+  run(st, coord, 'notices.save', { id: n.result.id, body: 'Equipe (corrigido)' });
+  assert.equal(st.notices.find((x) => x.id === n.result.id).audience.who, 'equipe');
+  const e = run(st, coord, 'events.save', { title: 'Conselho', type: 'reuniao', date: '2026-10-20', audience: { who: 'equipe' } });
+  run(st, coord, 'events.save', { id: e.result.id, title: 'Conselho de classe' });
+  assert.equal(st.events.find((x) => x.id === e.result.id).audience.who, 'equipe');
+});
+
+test('com aprovação ligada, o professor não reescreve o que a coordenação aprovou', () => {
+  const st = fresh();
+  st.settings.diaryApproval = true;
+  const prof = who(st, 'Marcos');
+  const c = teacherClass(st, prof);
+  const r = run(st, prof, 'diary.save', { type: 'recado', classIds: [c.id], title: 'Passeio', body: 'Texto revisado' });
+  run(st, who(st, 'Fernanda'), 'diary.approve', { id: r.result.id });
+  fails(st, prof, 'diary.save', { id: r.result.id, body: 'Texto nunca revisado' }, 'conflict');
+});
