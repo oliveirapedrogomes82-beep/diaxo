@@ -29,7 +29,7 @@ const Api = (() => {
           method,
           credentials: 'same-origin',
           cache: 'no-store',
-          headers: { 'X-Caderneta': '1', ...(body !== undefined && !rawBody ? { 'Content-Type': 'application/json' } : {}), ...headers },
+          headers: { 'X-Caderneta': '1', ...(window.__cadernetaModo ? { 'X-Caderneta-Modo': window.__cadernetaModo } : {}), ...(body !== undefined && !rawBody ? { 'Content-Type': 'application/json' } : {}), ...headers },
           body: rawBody ? body : body !== undefined ? JSON.stringify(body) : undefined,
         });
       } catch (e) {
@@ -476,7 +476,7 @@ const Api = (() => {
         const u = session && user(session.userId);
         if (u) addAudit(u, 'logout', 'Saiu do sistema');
         writeSession(null);
-        save();
+        await flush(); // a página recarrega em seguida: grava antes
         return { ok: true };
       },
       async logoutAll() {
@@ -566,7 +566,14 @@ const Api = (() => {
         if (spec.reauth && creds[u.id] && creds[u.id] !== (await sha(password))) fail('forbidden', 'Senha incorreta. Esta ação pede a sua senha.', 403);
         const e = viewEnv();
         const fpBefore = Perms.fingerprint(u, state, e);
-        const { out, shown } = execute(u, name, clone(input));
+        let executed;
+        try {
+          executed = execute(u, name, clone(input));
+        } catch (err) {
+          if (name === 'me.update' && err && err.code === 'conflict') fail('conflict', 'Não foi possível usar esse celular. Se ele estiver certo, fale com a secretaria.', 409);
+          throw err;
+        }
+        const { out, shown } = executed;
         const response = { result: clone(out.result), rev, changes: clone(annotateChanges(u, e, View.visibleChanges(state, u, out.changes, out.befores, e))) };
         if (shown.length) response.effects = shown;
         if (out.undoable) {
@@ -619,6 +626,13 @@ const Api = (() => {
       },
       async history(coll, params = {}) {
         const u = needUser();
+        if (params.as) {
+          const target = user(params.as);
+          if (!target || Perms.isFamily(u) || !Perms.canPreview(u, target, state)) fail('not_found', 'Pessoa não encontrada.', 404);
+          if (!['diary', 'routines', 'messages', 'attendance', 'invoices', 'classes'].includes(coll)) fail('not_found', 'Histórico não disponível.', 404);
+          const { as, ...rest } = params;
+          return clone(View.historyAs(state, u, target, coll, rest, env(), viewEnv()));
+        }
         if (!['diary', 'routines', 'messages', 'attendance', 'invoices', 'classes'].includes(coll)) fail('not_found', 'Histórico não disponível.', 404);
         return clone(View.history(state, u, coll, params, viewEnv()));
       },
@@ -737,6 +751,15 @@ const Api = (() => {
   };
 
   const backend = isLocal ? LocalBackend() : HttpBackend();
+  // "ver como" é somente leitura: o histórico vem da pessoa-alvo e nada é enviado
+  const inPreview = () => typeof Store !== 'undefined' && Store.preview;
+  const history = backend.history;
+  backend.history = (coll, params = {}) => history(coll, inPreview() ? { ...params, as: Store.preview.id } : params);
+  for (const k of ['uploadFile', 'password', 'logoutAll', 'consent', 'mode', 'read', 'importBackup', 'exportBackup']) {
+    const fn = backend[k];
+    if (typeof fn !== 'function') continue;
+    backend[k] = (...args) => (inPreview() ? Promise.reject(new ApiError('forbidden', 'No modo "ver como" nada pode ser alterado.', 403)) : fn(...args));
+  }
   backend.isLocal = isLocal;
   backend.ApiError = ApiError;
   return backend;

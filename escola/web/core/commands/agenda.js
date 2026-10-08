@@ -35,6 +35,14 @@
     return list.filter((id) => kept.includes(id) || !rest.includes(id));
   };
 
+  /** Ao publicar um item, "toca" os anexos para que os dados do arquivo (nome, tipo) cheguem a quem passa a vê-lo. */
+  const touchFiles = (tx, item) => {
+    for (const id of item.attachments || []) {
+      const f = tx.get('files', id);
+      if (f) tx.put('files', f);
+    }
+  };
+
   /**
    * diary.save {id?, type, classIds[] (ou classId), studentIds[] (alunos escolhidos), category, subjectId, title, body,
    *             date, due, respondBy, requireAck, internal, attachments[], publishAt, draft}
@@ -84,7 +92,7 @@
         if (cur.type === 'autorizacao' && answered) fail('conflict', 'Esta autorização já tem respostas. Cancele e envie uma nova.');
         // com aprovação da coordenação, o que já foi publicado não muda sem passar por ela de novo
         if (st.diaryApproval && cur.status === 'publicado' && !cur.internal && !ctx.can('diario.aprovar')) fail('conflict', 'Com a aprovação da coordenação ligada, um item já publicado só pode ser alterado pela coordenação. Cancele e envie um novo, ou peça a correção.');
-        const subjectId = input.subjectId && input.subjectId in (tx.get('classes', cur.classId) || {}).subjects ? input.subjectId : cur.subjectId;
+        const subjectId = input.subjectId && X.hasSubject(tx, tx.get('classes', cur.classId), input.subjectId) ? input.subjectId : cur.subjectId;
         const attachments = attachGroupFiles(tx, ctx, input.attachments ?? cur.attachments, cur);
         X.releaseFiles(tx, cur.attachments, attachments, { coll: 'diary', id: cur.id });
         if (input.baseUpdatedAt && cur.updatedAt !== input.baseUpdatedAt) {
@@ -104,9 +112,17 @@
             delete next.cancelReason;
           }
         }
+        // ocorrência interna que passa a ir para a família: com aprovação ligada, passa pela coordenação
+        if (cur.type === 'ocorrencia' && cur.internal && !internal && st.diaryApproval && !ctx.can('diario.aprovar')) {
+          next.status = 'pendente';
+          delete next.approvedBy;
+        }
         if (answered || cur.status === 'publicado') next.editedAt = env.now;
         tx.put('diary', next);
-        if (next.status === 'publicado' && cur.status !== 'publicado') tx.effect({ type: 'notify', coll: 'diary', ids: [cur.id] });
+        if (next.status === 'publicado' && cur.status !== 'publicado') {
+          touchFiles(tx, next);
+          tx.effect({ type: 'notify', coll: 'diary', ids: [cur.id] });
+        }
         tx.summary = `${LABEL[type]} "${title}" editado(a)`;
         tx.audit = { entity: 'diary', ids: [cur.id] };
         return { id: cur.id, ids: [cur.id] };
@@ -124,7 +140,7 @@
         const c = tx.need('classes', classId, 'Turma');
         ctx.needClass(c.id);
         if (c.status === 'encerrada') fail('invalid', `A turma ${c.name} está encerrada.`);
-        const subjectId = input.subjectId && input.subjectId in c.subjects ? input.subjectId : null;
+        const subjectId = input.subjectId && X.hasSubject(tx, c, input.subjectId) ? input.subjectId : null;
         const roster = activeRoster(tx, c.id);
         const targets = studentIds.length ? studentIds : [null];
         for (const sid of targets) {
@@ -203,7 +219,10 @@
       if (cur.status !== 'pendente') fail('conflict', 'Este item não está aguardando aprovação.');
       const status = cur.publishAt && cur.publishAt > env.now ? 'agendado' : 'publicado';
       tx.put('diary', { ...cur, status, approvedBy: ctx.user.id, updatedAt: env.now });
-      if (status === 'publicado') tx.effect({ type: 'notify', coll: 'diary', ids: [cur.id] });
+      if (status === 'publicado') {
+        touchFiles(tx, cur);
+        tx.effect({ type: 'notify', coll: 'diary', ids: [cur.id] });
+      }
       tx.summary = `${LABEL[cur.type]} "${cur.title}" aprovado(a)`;
       tx.audit = { entity: 'diary', ids: [cur.id] };
       return { id: cur.id };
@@ -218,6 +237,7 @@
       for (const d of tx.list('diary').slice()) {
         if (d.status !== 'agendado' || !d.publishAt || d.publishAt > env.now) continue;
         tx.put('diary', { ...d, status: 'publicado', updatedAt: env.now });
+        touchFiles(tx, d);
         ids.push(d.id);
       }
       if (ids.length) tx.effect({ type: 'notify', coll: 'diary', ids });

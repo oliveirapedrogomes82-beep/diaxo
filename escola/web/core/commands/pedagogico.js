@@ -35,7 +35,7 @@
       let subjectId = null;
       if (period) {
         const lesson = rules.periodsFor(st, c, date).find((p) => p.period === period);
-        subjectId = (lesson && lesson.subjectId) || (input.subjectId && input.subjectId in c.subjects ? input.subjectId : null);
+        subjectId = (lesson && lesson.subjectId) || (typeof input.subjectId === 'string' && Object.prototype.hasOwnProperty.call(c.subjects || {}, input.subjectId) && tx.get('subjects', input.subjectId) ? input.subjectId : null);
         if (!subjectId) fail('invalid', 'Esta aula não está no horário da turma.');
       }
       if (!canTakeLesson(ctx, c, period, subjectId)) fail('forbidden', 'Esta aula é de outro(a) professor(a).');
@@ -56,6 +56,8 @@
         let m = Object.prototype.hasOwnProperty.call(given, s.id) ? V.oneOf(given[s.id], 'Marcação', ['P', 'F', 'J', 'A']) : old || 'P';
         // justificar e abonar é de quem tem chamada.justificar; na chamada comum só P e F
         if ((m === 'J' || m === 'A') && m !== old && !ctx.can('chamada.justificar')) m = 'F';
+        // e uma falta já justificada/abonada pela secretaria não é desfeita por quem não justifica
+        if ((old === 'J' || old === 'A') && m !== old && !ctx.can('chamada.justificar')) m = old;
         if (m !== old && (m === 'P' || m === 'F')) delete reasons[s.id];
         marks[s.id] = m;
       }
@@ -135,7 +137,7 @@
         return { id: key };
       }
       const sub = tx.need('subjects', input.subjectId, 'Disciplina');
-      if (!(sub.id in klass.subjects)) fail('invalid', `O ${klass.name} não tem ${sub.name}.`);
+      if (!Object.prototype.hasOwnProperty.call(klass.subjects || {}, sub.id)) fail('invalid', `O ${klass.name} não tem ${sub.name}.`);
       if (!perms.canGradeSubject(ctx, klass, sub.id)) fail('forbidden', `${sub.name} no ${klass.name} é de outro(a) professor(a).`);
       let value = input.value;
       if (value === '' || value === undefined) value = null;

@@ -135,16 +135,17 @@ const U = (() => {
 
   /** Evita que planilhas executem fórmulas digitadas por usuários (=, +, -, @, tab, CR no início). */
   const cell = (c) => {
-    const s = c == null ? '' : String(c);
-    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    // quebras de linha viram \n; qualquer início de linha que pareça fórmula ganha apóstrofo
+    const s = (c == null ? '' : String(c)).replace(/\r\n?/g, '\n');
+    return s.split('\n').map((line) => (/^[=+\-@\t]/.test(line) ? `'${line}` : line)).join('\n');
   };
   const toCSV = (rows) =>
     '﻿' +
     rows.map((r) => r.map((c) => {
       const s = cell(c);
-      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(';')).join('\r\n');
-  const toTSV = (rows) => rows.map((r) => r.map((c) => cell(c).replace(/[\t\n]/g, ' ')).join('\t')).join('\n');
+  const toTSV = (rows) => rows.map((r) => r.map((c) => cell(c).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
   const download = (filename, content, mime = 'text/csv;charset=utf-8') => {
     const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);

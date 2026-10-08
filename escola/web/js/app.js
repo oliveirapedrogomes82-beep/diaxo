@@ -394,8 +394,8 @@ const App = (() => {
     }
     Store.clear();
     UI.closeAll();
-    history.replaceState(null, '', location.pathname + location.search);
-    boot();
+    // recarrega a página: nenhuma tela, cache de módulo ou dado da conta anterior fica na memória
+    location.replace(location.pathname + location.search);
   };
 
   /** Sessão venceu no meio do uso: pede a senha sem perder a tela. Resolve true se entrou de novo. */
@@ -409,6 +409,7 @@ const App = (() => {
     }
     relogging = new Promise((resolve) => {
       let ok = false;
+      document.body.classList.add('locked'); // esconde a tela com dados enquanto pede a senha
       UI.modal({
         title: 'Sua sessão terminou',
         sub: 'Por segurança, a sessão fecha depois de um tempo sem uso. Entre de novo para continuar de onde parou.',
@@ -446,6 +447,7 @@ const App = (() => {
         },
         onClose() {
           relogging = null;
+          document.body.classList.remove('locked');
           resolve(ok);
           if (!ok) logout();
         },
@@ -634,6 +636,14 @@ const App = (() => {
 
   // ---------- conta do usuário ----------
   const myAccount = () => {
+    if (Store.preview) {
+      return UI.modal({
+        title: 'Meus dados',
+        size: 'sm',
+        body: html`<p>Você está vendo o sistema como <b>${Store.preview.name}</b>. Os dados e a senha da conta não podem ser alterados neste modo.</p>`,
+        foot: html`<button type="button" class="btn" data-close>Fechar</button><button type="button" class="btn primary" data-act="end-preview" data-close>Voltar para a minha conta</button>`,
+      });
+    }
     const m = Store.me;
     const fam = Store.family;
     UI.modal({

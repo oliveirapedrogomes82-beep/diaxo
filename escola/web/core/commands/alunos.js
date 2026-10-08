@@ -180,8 +180,13 @@
         tx.list('invoices').some((i) => i.studentId === s.id) ||
         tx.list('support').some((r) => r.studentId === s.id) ||
         tx.list('messages').some((m) => m.studentId === s.id) ||
-        tx.list('diary').some((d) => (d.recipients || []).includes(s.id) && d.studentId);
-      if (history) fail('conflict', `${s.name} já tem histórico (notas, chamadas, cobranças ou registros). Registre a transferência em vez de excluir.`);
+        tx.list('diary').some((d) => (d.recipients || []).includes(s.id) && d.studentId) ||
+        tx.list('plans').some((p) => p.studentId === s.id) ||
+        tx.keys('routines').some((k) => k.endsWith('|' + s.id)) ||
+        tx.keys('councils').some((k) => k.split('|')[1] === s.id) ||
+        tx.keys('acks').some((k) => Object.prototype.hasOwnProperty.call(tx.state.acks[k] || {}, s.id));
+      if (history) fail('conflict', `${s.name} já tem histórico (notas, chamadas, cobranças, rotina, planos ou registros). Registre a transferência em vez de excluir.`);
+      if (s.photo) X.releaseFiles(tx, [s.photo], [], { coll: 'students', id: s.id });
       tx.del('students', s.id);
       tx.summary = `Cadastro de ${s.name} excluído (feito por engano)`;
       tx.audit = { entity: 'students', ids: [s.id] };

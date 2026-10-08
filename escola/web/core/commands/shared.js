@@ -80,5 +80,17 @@
     }
   };
 
-  return { staffUser, attachFiles, releaseFiles, audienceFrom, inviteEffect, endSessionsEffect, uniqueLogin };
+  /**
+   * Quem monta turmas pode vincular uma pessoa da equipe? Sem dominância, só quem tem todos os acessos dela
+   * (fora os confidenciais): vincular amplia o alcance da pessoa, então nunca sobre quem tem mais acesso.
+   */
+  const assertCanLink = (tx, ctx, user) => {
+    if (!user || perms.dominates(ctx.user, user, tx.state)) return;
+    const mine = perms.effective(ctx.user, tx.state.settings);
+    for (const p of perms.effective(user, tx.state.settings)) if (!perms.CONFIDENTIAL.has(p) && !mine.has(p)) fail('forbidden', `Você não pode alterar os vínculos de ${user.name}: ela tem acessos que você não tem.`);
+  };
+  /** A turma tem esta disciplina? (só chaves próprias e ids de disciplinas que existem) */
+  const hasSubject = (tx, klass, subjectId) => typeof subjectId === 'string' && util.isId(subjectId) && !!klass && Object.prototype.hasOwnProperty.call(klass.subjects || {}, subjectId) && !!tx.get('subjects', subjectId);
+
+  return { staffUser, attachFiles, releaseFiles, audienceFrom, inviteEffect, endSessionsEffect, uniqueLogin, assertCanLink, hasSubject };
 });

@@ -4,6 +4,7 @@
      node server/index.js                      servidor normal (dados em DATA_DIR, padrão ./data)
      node server/index.js --demo               demonstração: banco em memória com a escola de exemplo
      node server/index.js --reset-owner-password   gera um código para a conta titular criar nova senha
+     node server/index.js --reset-password=<e-mail ou celular>   idem para qualquer conta (ex.: psicóloga, que a direção não redefine)
    Variáveis: PORT, HOST, PUBLIC_URL, DATA_DIR, TRUST_PROXY, ALLOW_INSECURE_HTTP, SETUP_TOKEN. */
 const http = require('node:http');
 const fs = require('node:fs');
@@ -110,16 +111,26 @@ if (DEMO) {
   db.setMeta('dataVersion', Core.schema.DATA_VERSION);
 }
 
-// ---------- CLI: nova senha da titular ----------
-if (args.has('--reset-owner-password')) {
-  const owner = state.users.find((u) => u.id === state.settings.ownerId);
-  if (!owner) fail('Esta instalação ainda não tem conta titular. Inicie o servidor e faça a instalação.');
+// ---------- CLI: código de nova senha (titular, ou qualquer conta pelo e-mail/celular) ----------
+const resetArg = process.argv.find((a) => a.startsWith('--reset-password='));
+if (args.has('--reset-owner-password') || resetArg) {
+  let target;
+  if (resetArg) {
+    const login = resetArg.slice('--reset-password='.length).trim().toLowerCase();
+    const d = Core.util.digits(login);
+    target = state.users.find((u) => (login.includes('@') ? u.email && u.email.toLowerCase() === login : d.length >= 10 && u.phone && Core.util.digits(u.phone) === d));
+    if (!target) fail('Nenhuma conta com esse e-mail ou celular.');
+  } else {
+    target = state.users.find((u) => u.id === state.settings.ownerId);
+    if (!target) fail('Esta instalação ainda não tem conta titular. Inicie o servidor e faça a instalação.');
+  }
+  if (target.status !== 'ativo') fail(`A conta de ${target.name} está desativada.`);
   const code = Core.util.tempPassword().replace('-', '').toUpperCase();
   const expiresAt = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
-  db.commit({ invites: [{ codeHash: auth.sha256('invite:' + code), userId: owner.id, purpose: 'redefinicao', expiresAt }], endSessions: [owner.id] });
-  db.addAudit({ at: new Date().toISOString(), cmd: 'titular.redefinir', summary: `Código de nova senha gerado pelo servidor para ${owner.name}`, userId: null, userName: 'Servidor' });
-  console.log(`\n  Código para ${owner.name} criar uma nova senha: ${code.slice(0, 5)}-${code.slice(5)}`);
-  console.log('  Na tela de entrada, use "Tenho um código de acesso". Vale por 72 horas.\n');
+  db.commit({ invites: [{ codeHash: auth.sha256('invite:' + code), userId: target.id, purpose: 'redefinicao', expiresAt }], endSessions: [target.id] });
+  db.addAudit({ at: new Date().toISOString(), cmd: 'senha.redefinir.servidor', summary: `Código de nova senha gerado pelo servidor para ${target.name}`, userId: null, userName: 'Servidor', entity: 'users', ids: [target.id] });
+  console.log(`\n  Código para ${target.name} criar uma nova senha: ${code.slice(0, 5)}-${code.slice(5)}`);
+  console.log('  Na tela de entrada, use "Tenho um código de acesso". Vale por 72 horas e só uma vez.\n');
   process.exit(0);
 }
 

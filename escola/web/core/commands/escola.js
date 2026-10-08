@@ -262,7 +262,9 @@
       let teacherId = null;
       if (input.teacherId) {
         assertLinker(ctx, input.teacherId);
-        teacherId = X.staffUser(tx, input.teacherId, 'Professor(a) regente').id;
+        const t = X.staffUser(tx, input.teacherId, 'Professor(a) regente');
+        X.assertCanLink(tx, ctx, t);
+        teacherId = t.id;
       }
       const id = env.newId('c');
       const subjects = {};
@@ -314,13 +316,17 @@
       const c = tx.need('classes', input.classId, 'Turma');
       assertLinker(ctx, input.userId);
       const user = X.staffUser(tx, input.userId || null, 'Professor(a)');
+      X.assertCanLink(tx, ctx, user);
+      // tirar alguém de uma turma também mexe no alcance dela: vale a mesma regra para quem sai
+      const prevId = input.slot === 'regente' ? c.teacherId : X.hasSubject(tx, c, input.slot) ? c.subjects[input.slot] : null;
+      if (prevId && prevId !== (user && user.id)) X.assertCanLink(tx, ctx, tx.get('users', prevId));
       const userId = user ? user.id : null;
       if (input.slot === 'regente') {
         tx.put('classes', { ...c, teacherId: userId });
         tx.summary = `${rules.homeroomLabel(c)} do ${c.name}: ${user ? user.name : 'removido(a)'}`;
       } else {
         const sub = tx.need('subjects', input.slot, 'Disciplina');
-        if (!(sub.id in c.subjects)) fail('invalid', `O ${c.name} não tem ${sub.name}.`);
+        if (!X.hasSubject(tx, c, sub.id)) fail('invalid', `O ${c.name} não tem ${sub.name}.`);
         tx.put('classes', { ...c, subjects: { ...c.subjects, [sub.id]: userId } });
         tx.summary = `${sub.name} no ${c.name}: ${user ? user.name : 'sem professor(a)'}`;
       }
@@ -336,6 +342,9 @@
       const ids = V.ids(input.userIds, 'Auxiliares', { max: 20 });
       ids.forEach((id) => assertLinker(ctx, id));
       if (!ctx.all) assertLinker(ctx, null);
+      const before = new Set(c.assistantIds || []);
+      const after = new Set(ids);
+      for (const id of new Set([...before, ...after])) if (before.has(id) !== after.has(id)) X.assertCanLink(tx, ctx, tx.get('users', id));
       tx.put('classes', { ...c, assistantIds: ids.map((id) => X.staffUser(tx, id, 'Auxiliar').id) });
       tx.summary = `Auxiliares do ${c.name} atualizados`;
       tx.audit = { entity: 'classes', ids: [c.id] };
@@ -373,7 +382,7 @@
       const day = V.int(input.day, 'Dia', { required: true, min: 0, max: 4 });
       const period = V.int(input.period, 'Tempo', { required: true, min: 0, max: 9 });
       const subjectId = input.subjectId || '';
-      if (subjectId && !(subjectId in c.subjects)) fail('invalid', 'Esta disciplina não faz parte da turma.');
+      if (subjectId && !X.hasSubject(tx, c, subjectId)) fail('invalid', 'Esta disciplina não faz parte da turma.');
       const schedule = c.schedule.map((d) => d.slice());
       while (schedule.length < 5) schedule.push([]);
       while (schedule[day].length <= period) schedule[day].push('');

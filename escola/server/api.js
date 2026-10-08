@@ -31,6 +31,12 @@ class Api {
     this.codeByIp = new auth.RateLimiter({ max: 10, windowMs: 15 * MIN });
     this.cookieName = this.config.secure ? '__Host-cad_sid' : 'cad_sid';
     this.bootId = util.uid('b');
+    this.accountEvents = []; // [{at, userId}] login, primeiro acesso, aceite: atualiza a situação da conta para quem gerencia
+    this.meUpdates = new auth.RateLimiter({ max: 5, windowMs: 15 * MIN });
+  }
+  accountEvent(userId) {
+    this.accountEvents.push({ at: new Date().toISOString(), userId });
+    if (this.accountEvents.length > 2000) this.accountEvents.splice(0, this.accountEvents.length - 2000);
   }
 
   // ---------- utilidades ----------
@@ -107,6 +113,7 @@ class Api {
     this.db.createSession({ tokenHash: auth.sha256(token), userId: u.id, mode: mode || (Perms.isFamily(u) ? 'familia' : 'equipe'), absoluteMs: t.absolute, idleMs: t.idle, ip: this.ip(req), ua: req.headers['user-agent'] });
     res.setHeader('Set-Cookie', cookie(this.cookieName, token, { maxAge: t.absolute / 1000, secure: this.config.secure }));
     this.db.setLastLogin(u.id, new Date().toISOString());
+    this.accountEvent(u.id);
   }
   viewEnv(s) {
     return this.env({ mode: s.mode === 'familia' ? 'familia' : undefined });
@@ -218,11 +225,15 @@ class Api {
     const u = this.findLogin(login);
     const cred = u ? this.db.getCredentials(u.id) : null;
     const ok = u && cred && cred.hash ? await auth.verifyPassword(String(body.password || ''), cred.hash) : await auth.dummyVerify(String(body.password || ''));
-    if (!ok || !this.usable(u)) {
+    if (!ok) {
       this.loginByIp.hit(ipKey);
       this.loginByAccount.hit(acctKey);
       this.audit(null, 'login.falha', 'Tentativa de entrada recusada', { userId: u ? u.id : null, userName: u ? u.name : null }, req);
       throw new HttpError(401, 'unauthorized', 'E-mail, celular ou senha incorretos.');
+    }
+    if (!this.usable(u)) {
+      this.audit(null, 'login.bloqueado', 'Entrada recusada: acesso desativado ou vencido', { userId: u.id, userName: u.name }, req);
+      throw new HttpError(403, 'forbidden', Perms.isFamily(u) ? 'Seu acesso ao Portal da família não está liberado. Fale com a escola.' : 'Sua conta está desativada ou o acesso venceu. Fale com a direção da escola.');
     }
     this.loginByAccount.reset(acctKey);
     this.startSession(req, res, u);
@@ -308,6 +319,7 @@ class Api {
     const version = String((this.state.settings.privacy || {}).noticeVersion || '1');
     if (String(body.version) !== version) throw new HttpError(409, 'conflict', 'O aviso de privacidade foi atualizado. Leia a nova versão.');
     this.db.setConsent(s.user.id, new Date().toISOString(), version);
+    this.accountEvent(s.user.id);
     this.audit(s, 'privacidade.aceite', `Aceitou o aviso de privacidade (versão ${version})`, {}, req);
     return sendJSON(req, res, 200, { ok: true });
   }
@@ -375,14 +387,34 @@ class Api {
     const env = this.viewEnv(s);
     const fp = Perms.fingerprint(s.user, this.state, env);
     const oldest = this.commits.length ? this.commits[0].rev : rev + 1;
-    if (boot !== this.bootId || !Number.isFinite(since) || since > rev || since < oldest - 1 || this.fingerprints.get(s.tokenHash) !== fp) return sendJSON(req, res, 200, { rev, resync: true });
+    if (boot !== this.bootId || !Number.isFinite(since) || since > rev || since < oldest - 1 || this.fingerprints.get(s.tokenHash) !== fp || this.modeMismatch(req, s)) return sendJSON(req, res, 200, { rev, resync: true });
     let changes = [];
     for (const c of this.commits) if (c.rev > since) changes.push(...View.visibleChanges(this.state, s.user, c.changes, c.befores, env));
+    const managesAccounts = () => { const p = Perms.context(s.user, this.state, env).perms; return p.has('usuarios.gerenciar') || p.has('familias.acessos'); };
+    if (readsAfter && !isNaN(Date.parse(readsAfter)) && this.accountEvents.length && managesAccounts()) {
+      const after = new Date(readsAfter).toISOString();
+      const ids = [...new Set(this.accountEvents.filter((e) => e.at > after).map((e) => e.userId))];
+      if (ids.length) {
+        const f = View.makeFilter(this.state, s.user, env);
+        for (const id of ids) {
+          const u = this.user(id);
+          const v = u && f.filter('users', id, u);
+          if (v && !changes.some((c) => c.coll === 'users' && c.id === id)) changes.push({ coll: 'users', id, op: 'put', value: v });
+        }
+      }
+    }
     changes = this.annotateChanges(s, env, changes);
     const body = { rev, now: env.now, changes };
     const reads = readsAfter && !isNaN(Date.parse(readsAfter)) ? this.readsSince(s, env, new Date(readsAfter).toISOString()) : undefined;
     if (reads && reads.length) body.reads = reads;
     return sendJSON(req, res, 200, body);
+  }
+
+  /** A aba diz em que área está (equipe ou família); se outra aba trocou a área da sessão, esta precisa recarregar. */
+  modeMismatch(req, s) {
+    const m = req.headers['x-caderneta-modo'];
+    if (!m || Perms.isFamily(s.user)) return false;
+    return (m === 'familia') !== (s.mode === 'familia');
   }
 
   // ---------- comandos ----------
@@ -433,6 +465,7 @@ class Api {
 
   async postCmd(req, res, name) {
     const s = this.needSession(req);
+    if (this.modeMismatch(req, s)) throw new HttpError(409, 'conflict', 'Você trocou de área (equipe / Portal da família) em outra aba. A tela foi atualizada; confira e faça de novo.');
     const limit = name === 'routines.save' || name === 'attendance.save' ? 400000 : 200000;
     const body = await readJSON(req, limit);
     const spec = E.get(name);
@@ -446,7 +479,21 @@ class Api {
       const cred = this.db.getCredentials(s.user.id);
       if (!cred || !cred.hash || !(await auth.verifyPassword(String(body.password || ''), cred.hash))) throw new HttpError(403, 'forbidden', 'Senha incorreta. Esta ação pede a sua senha.');
     }
-    const { out, rev, shown, fpBefore } = this.execute(s, name, body.input, req);
+    if (name === 'me.update') {
+      const key = 'me:' + s.user.id;
+      if (this.meUpdates.blocked(key)) throw new HttpError(429, 'rate', 'Muitas tentativas. Aguarde alguns minutos.');
+    }
+    let executed;
+    try {
+      executed = this.execute(s, name, body.input, req);
+    } catch (err) {
+      if (name === 'me.update' && err && err.code === 'conflict') {
+        this.meUpdates.hit('me:' + s.user.id);
+        throw new HttpError(409, 'conflict', 'Não foi possível usar esse celular. Se ele estiver certo, fale com a secretaria.');
+      }
+      throw err;
+    }
+    const { out, rev, shown, fpBefore } = executed;
     const env = this.viewEnv(s);
     const response = { result: out.result, rev, changes: this.annotateChanges(s, env, View.visibleChanges(this.state, s.user, out.changes, out.befores, env)) };
     if (shown.length) response.effects = shown;
@@ -515,7 +562,15 @@ class Api {
       return v && util.isId(v) ? v : null;
     };
     const before = url.searchParams.get('before');
-    const out = View.history(this.state, s.user, coll, { classId: q('classId'), studentId: q('studentId'), before: before && util.isValidDate(before) ? before : null, limit: url.searchParams.get('limit') }, this.viewEnv(s));
+    const opts = { classId: q('classId'), studentId: q('studentId'), before: before && util.isValidDate(before) ? before : null, limit: url.searchParams.get('limit') };
+    const as = q('as');
+    let out;
+    if (as) {
+      // "ver como": histórico da pessoa-alvo, só com o que quem está vendo também pode ver
+      const target = this.user(as);
+      if (!target || Perms.isFamily(s.user) || !Perms.canPreview(s.user, target, this.state)) throw new HttpError(404, 'not_found', 'Pessoa não encontrada.');
+      out = View.historyAs(this.state, s.user, target, coll, opts, this.env(), this.viewEnv(s));
+    } else out = View.history(this.state, s.user, coll, opts, this.viewEnv(s));
     return sendJSON(req, res, 200, out);
   }
 

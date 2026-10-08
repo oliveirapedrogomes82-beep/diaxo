@@ -212,7 +212,31 @@
       for (const s of state.students || []) if (reachesStudent(c, s)) ids.push(s.id);
       reach = ids.sort().join(',');
     }
-    return [user.status, user.validUntil || '', c.family ? 'F' : 'E', [...c.perms].join(','), c.all ? '*' : [...c.classIds].sort().join(','), reach, state.settings && state.settings.ownerId === user.id ? 'o' : ''].join('#');
+    // família: o que ela vê também depende de dados fora dos próprios documentos (etapas liberadas, cobrança ligada,
+    // ser o responsável financeiro, quem da equipe aparece para ela) — se mudar, o cliente recarrega o retrato
+    let fam = '';
+    if (c.family) {
+      const st = state.settings || {};
+      const released = Object.entries((st.terms || {})[String(st.year)] || {}).filter(([, t]) => t && t.released).map(([k]) => k).sort().join(',');
+      const fin = [];
+      const staff = new Set();
+      for (const s of state.students || []) {
+        if (!c.studentIds.has(s.id)) continue;
+        const g = (s.guardians || []).find((x) => x.userId === user.id && !x.bloqueado);
+        if (g && g.financeiro) fin.push(s.id);
+      }
+      for (const k of state.classes || []) {
+        if (!c.classIds.has(k.id)) continue;
+        if (k.teacherId) staff.add(k.teacherId);
+        (k.assistantIds || []).forEach((id) => staff.add(id));
+        Object.values(k.subjects || {}).forEach((id) => id && staff.add(id));
+      }
+      for (const m of state.messages || []) if (c.studentIds.has(m.studentId)) (m.posts || []).forEach((p) => p.kind !== 'registro' && staff.add(p.userId));
+      for (const d of state.diary || []) if ((d.status === 'publicado' || d.status === 'cancelado') && !d.internal && (d.recipients || []).some((id) => c.studentIds.has(id))) staff.add(d.authorId);
+      for (const p of state.plans || []) if (c.studentIds.has(p.studentId) && p.sharedWith && p.sharedWith.familia) staff.add(p.authorId);
+      fam = [released, fin.sort().join(','), [...staff].sort().join(',')].join('/');
+    }
+    return [user.status, user.validUntil || '', c.family ? 'F' : 'E', [...c.perms].join(','), c.all ? '*' : [...c.classIds].sort().join(','), reach, state.settings && state.settings.ownerId === user.id ? 'o' : '', state.settings && state.settings.chargesFees === false ? 'nf' : 'f', fam].join('#');
   };
 
   /** O contexto alcança este aluno? */

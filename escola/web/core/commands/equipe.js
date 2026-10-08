@@ -96,6 +96,10 @@
       const cur = tx.need('users', input.id, 'Pessoa');
       needDominance(tx, ctx, cur);
       if (cur.status !== 'ativo') fail('conflict', `${cur.name} está com a conta desativada.`);
+      // quem recebe o código entra como a pessoa: nunca dá para "virar" quem lê atendimentos sigilosos sem ter esse acesso
+      const mine = perms.effective(ctx.user, tx.state.settings);
+      const secret = [...perms.effective({ ...cur, status: 'ativo' }, tx.state.settings)].filter((p) => perms.CONFIDENTIAL.has(p) && !mine.has(p));
+      if (secret.length) fail('forbidden', `${cur.name} tem acesso a atendimentos sigilosos. Por segurança, só quem também tem esse acesso gera o código, ou o servidor (veja "Senha perdida" no guia de implantação).`);
       if (!cur.email && !cur.phone) fail('invalid', `Cadastre um e-mail ou celular de ${cur.name} antes: é com um deles que a pessoa entra.`);
       if (!cur.login) tx.put('users', { ...cur, login: true });
       X.inviteEffect(tx, cur.id, env, input.reset ? 'redefinicao' : 'convite');
@@ -144,16 +148,14 @@
       if (!ctx.all) fail('forbidden', 'Só quem enxerga todas as turmas pode definir vínculos.');
       const u = X.staffUser(tx, input.userId, 'Pessoa');
       if (u.id === ctx.user.id) fail('forbidden', 'Peça a outra pessoa da gestão para vincular você a uma turma.');
-      if (!perms.dominates(ctx.user, u, tx.state)) {
-        // sem dominância (inclusive sem gerenciar contas) ainda pode montar turmas — mas não sobre quem tem mais acesso
-        const mine = perms.effective(ctx.user, tx.state.settings);
-        for (const p of perms.effective(u, tx.state.settings)) if (!perms.CONFIDENTIAL.has(p) && !mine.has(p)) fail('forbidden', `Você não pode alterar os vínculos de ${u.name}.`);
-      }
+      if (tx.get('settings').ownerId === u.id) fail('forbidden', 'A conta titular não é alterada por outra pessoa. Para pôr a titular numa turma, use a tela da turma.');
+      // sem dominância (inclusive sem gerenciar contas) ainda pode montar turmas — mas não sobre quem tem mais acesso
+      X.assertCanLink(tx, ctx, u);
       const wanted = new Map();
       for (const l of Array.isArray(input.classes) ? input.classes.slice(0, 100) : []) {
         const c = tx.need('classes', l.classId, 'Turma');
         const role = V.oneOf(l.role, 'Papel na turma', ['regente', 'professor', 'auxiliar']);
-        const subjectIds = V.ids(l.subjectIds, 'Disciplinas', { max: 20 }).filter((sid) => sid in c.subjects);
+        const subjectIds = V.ids(l.subjectIds, 'Disciplinas', { max: 20 }).filter((sid) => X.hasSubject(tx, c, sid));
         wanted.set(c.id, { role, subjectIds });
       }
       for (const c of tx.list('classes').slice()) {

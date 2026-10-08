@@ -283,3 +283,56 @@ test('com aprovação ligada, o professor não reescreve o que a coordenação a
   run(st, who(st, 'Fernanda'), 'diary.approve', { id: r.result.id });
   fails(st, prof, 'diary.save', { id: r.result.id, body: 'Texto nunca revisado' }, 'conflict');
 });
+
+test('revisão: vínculos, chamada justificada, exclusão, disciplinas e convites sigilosos', () => {
+  const st = fresh();
+  const coord = who(st, 'Fernanda'); // turmas.gerenciar, sem usuarios.gerenciar nem financeiro
+  const fin = who(st, 'Paulo');
+  const prof = who(st, 'Marcos');
+  const c = st.classes[2];
+  fails(st, coord, 'classes.assign', { classId: c.id, slot: 'regente', userId: fin.id }, 'forbidden');
+  fails(st, coord, 'classes.assistants', { classId: c.id, userIds: [fin.id] }, 'forbidden');
+  run(st, coord, 'classes.assign', { classId: c.id, slot: 'regente', userId: prof.id });
+  fails(st, coord, 'staff.links', { userId: who(st, 'Ana Beatriz').id, classes: [] }, 'forbidden');
+  // falta justificada pela secretaria não é desfeita pelo professor
+  const pc = teacherClass(st, prof);
+  const lesson = Core.rules.periodsFor(st.settings, pc, '2026-10-05').find((p) => pc.subjects[p.subjectId] === prof.id);
+  const kid = st.students.find((x) => x.classId === pc.id && x.status === 'ativo');
+  run(st, prof, 'attendance.save', { classId: pc.id, date: '2026-10-05', period: lesson.period, marks: { [kid.id]: 'F' } });
+  run(st, who(st, 'Rita'), 'attendance.justify', { classId: pc.id, date: '2026-10-05', studentId: kid.id, mark: 'J', reason: 'Atestado' });
+  run(st, prof, 'attendance.save', { classId: pc.id, date: '2026-10-05', period: lesson.period, marks: { [kid.id]: 'P' } });
+  const rec = st.attendance[`${pc.id}|2026-10-05|${lesson.period}`];
+  assert.equal(rec.marks[kid.id], 'J');
+  assert.equal(rec.reasons[kid.id], 'Atestado');
+  // aluno com plano de apoio não é excluído
+  const withPlan = st.students.find((x) => st.plans.some((p) => p.studentId === x.id));
+  fails(st, who(st, 'Ana Beatriz'), 'students.delete', { id: withPlan.id }, 'conflict');
+  // chaves do protótipo não viram disciplina
+  const out = run(st, prof, 'diary.save', { type: 'dever', classIds: [pc.id], subjectId: 'constructor', title: 'X', body: 'Y' });
+  assert.equal(st.diary.find((d) => d.id === out.result.id).subjectId, null);
+  fails(st, coord, 'classes.slot', { classId: pc.id, day: 0, period: 0, subjectId: '__proto__' }, 'invalid');
+  // ninguém sem acesso a atendimentos gera código de quem lê atendimentos
+  fails(st, who(st, 'Ana Beatriz'), 'users.invite', { id: who(st, 'Júlia').id, reset: true }, 'forbidden');
+});
+
+test('revisão: ocorrência interna que passa a ir para a família espera a coordenação', () => {
+  const st = fresh();
+  st.settings.diaryApproval = true;
+  const prof = who(st, 'Marcos');
+  const pc = teacherClass(st, prof);
+  const kid = st.students.find((x) => x.classId === pc.id && x.status === 'ativo');
+  const oc = run(st, prof, 'diary.save', { type: 'ocorrencia', category: 'comportamento', internal: true, classIds: [pc.id], studentIds: [kid.id], title: 'Registro', body: 'Interno' });
+  assert.equal(st.diary.find((d) => d.id === oc.result.id).status, 'publicado');
+  run(st, prof, 'diary.save', { id: oc.result.id, internal: false });
+  assert.equal(st.diary.find((d) => d.id === oc.result.id).status, 'pendente');
+});
+
+test('revisão: textos de uma linha sem caracteres de controle', () => {
+  const st = fresh();
+  const prof = who(st, 'Marcos');
+  const pc = teacherClass(st, prof);
+  const out = run(st, prof, 'diary.save', { type: 'recado', classIds: [pc.id], title: 'Feira\r=1+1', body: 'Linha 1\r\nLinha 2\r=2' });
+  const d = st.diary.find((x) => x.id === out.result.id);
+  assert.equal(d.title, 'Feira =1+1');
+  assert.equal(d.body, 'Linha 1\nLinha 2\n=2');
+});

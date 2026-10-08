@@ -198,6 +198,14 @@ test('servidor real: instalação, contas, sessões e segurança', { timeout: 12
   assert.equal(r.status, 200);
   assert.equal((await paula.get('/snapshot')).status, 401);
   assert.equal((await p2.get('/snapshot')).status, 401);
+  const again = client(srv.base);
+  r = await again.post('/login', { login: '(11) 96666-5555', password: 'Giz-Colorido-77' });
+  assert.equal(r.status, 403, 'senha certa de conta desativada: mensagem clara, sem entrar');
+  assert.match(r.data.error.message, /desativada/);
+  // "Meus dados": celular de outra pessoa não revela de quem é
+  r = await owner.cmd('me.update', { phone: '(11) 96666-5555' });
+  assert.equal(r.status, 409);
+  assert.ok(!/96666/.test(r.data.error.message), 'a mensagem não repete o número');
 
   // ----- backup cifrado e importação maliciosa -----
   r = await owner.post('/export', { password: 'errada', passphrase: 'frase-longa-de-backup' });

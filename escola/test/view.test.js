@@ -175,3 +175,27 @@ test('recuperação final só aparece para a família com a última etapa libera
   run(st, coord, 'terms.update', { term: 4, closed: true, released: true });
   assert.equal(snapshot(st, fam).data.grades[key], 2.5);
 });
+
+test('revisão: histórico escolar, equipe visível à família e impressão digital', () => {
+  const st = fresh();
+  const fin = who(st, 'Paulo'); // vê alunos, sem notas nem chamada
+  const withHist = st.students.find((s) => (s.history || []).length);
+  if (withHist) {
+    const seen = snapshot(st, fin).data.students.find((s) => s.id === withHist.id);
+    assert.ok(seen.history.every((h) => h.avg === undefined && h.result === undefined && h.attendance === undefined));
+  }
+  // autora de plano não compartilhado não aparece para a família
+  const fam = family(st);
+  const kid = kidsOf(st, fam)[0];
+  const psi = who(st, 'Júlia');
+  st.plans.push({ id: 'l9teste01', studentId: kid.id, title: 'Plano', status: 'ativo', start: '2026-09-01', goals: 'x', adaptations: 'y', sharedWith: { professores: false, coordenacao: false, familia: false }, authorId: psi.id, updatedAt: '2026-09-01T12:00:00.000Z' });
+  const famUsers = snapshot(st, fam).data.users.map((u) => u.id);
+  const psiElsewhere = st.messages.some((m) => kidsOf(st, fam).some((k) => k.id === m.studentId) && (m.posts || []).some((p) => p.userId === psi.id));
+  if (!psiElsewhere) assert.ok(!famUsers.includes(psi.id));
+  // liberar o boletim muda a impressão digital da família (o portal recarrega)
+  const fp = Core.perms.fingerprint(fam, st);
+  run(st, who(st, 'Fernanda'), 'terms.update', { term: 4, closed: true, released: true });
+  assert.notEqual(Core.perms.fingerprint(fam, st), fp);
+  // CNPJ vai para a família (recibo)
+  assert.ok('cnpj' in snapshot(st, fam).data.settings || !st.settings.cnpj);
+});

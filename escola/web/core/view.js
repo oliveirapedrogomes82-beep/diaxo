@@ -15,7 +15,7 @@
     for (const k of keys) if (obj[k] !== undefined) out[k] = obj[k];
     return out;
   };
-  const FAMILY_SETTINGS = ['schoolName', 'phone', 'address', 'logo', 'year', 'timezone', 'termCount', 'termLabel', 'term', 'terms', 'passing', 'recovery', 'chargesFees', 'dueDay', 'lateFine', 'lateInterest', 'pixKey', 'segments', 'homeworkLabel', 'familyMessages', 'officeHours', 'routineFields', 'routineBring', 'privacy', 'demo'];
+  const FAMILY_SETTINGS = ['schoolName', 'cnpj', 'phone', 'address', 'logo', 'year', 'timezone', 'termCount', 'termLabel', 'term', 'terms', 'passing', 'recovery', 'chargesFees', 'dueDay', 'lateFine', 'lateInterest', 'pixKey', 'segments', 'homeworkLabel', 'familyMessages', 'officeHours', 'routineFields', 'routineBring', 'privacy', 'demo'];
 
   /**
    * Cria os filtros de um usuário. env: {now, today, mode?: 'familia', history?: true}.
@@ -55,9 +55,8 @@
         (c.assistantIds || []).forEach((id) => familyStaff.add(id));
         Object.values(c.subjects || {}).forEach((id) => id && familyStaff.add(id));
       }
-      for (const m of state.messages) if (ctx.studentIds.has(m.studentId)) (m.posts || []).forEach((p) => familyStaff.add(p.userId));
-      for (const d of state.diary) if (ctx.classIds.has(d.classId)) familyStaff.add(d.authorId);
-      for (const p of state.plans) if (ctx.studentIds.has(p.studentId)) familyStaff.add(p.authorId);
+      for (const m of state.messages) if (ctx.studentIds.has(m.studentId)) (m.posts || []).filter((p) => p.kind !== 'registro').forEach((p) => familyStaff.add(p.userId));
+      for (const p of state.plans) if (ctx.studentIds.has(p.studentId) && p.sharedWith && p.sharedWith.familia) familyStaff.add(p.authorId);
     }
 
     /** Item da agenda visível? Devolve o item recortado (ou null). */
@@ -83,6 +82,8 @@
       if (d.type === 'ocorrencia' && d.category !== 'elogio' && d.authorId !== user.id && !can('diario.ocorrencias') && !can('diario.aprovar') && !can('alunos.observacoes')) return null;
       return d;
     };
+
+    if (familyStaff) for (const d of state.diary) if (ctx.classIds.has(d.classId) && diaryFor(d)) familyStaff.add(d.authorId);
 
     const supportReadable = (r) => {
       if (ctx.family || !r) return false;
@@ -161,6 +162,18 @@
         if (!can('financeiro.ver') || !fees) {
           drop('fee');
           drop('discount');
+        }
+        if (Array.isArray(s.history) && (!can('notas.ver') || !can('chamada.ver'))) {
+          out.history = s.history.map((h) => {
+            const x = { ...h };
+            if (!can('notas.ver')) {
+              delete x.avg;
+              delete x.result;
+            }
+            if (!can('chamada.ver')) delete x.attendance;
+            return x;
+          });
+          hidden.push('history.detalhes');
         }
         out._hidden = hidden;
         return out;
@@ -447,5 +460,18 @@
     return { items: out.slice(0, lim), more: out.length > lim };
   }
 
-  return { makeFilter, snapshot, preview, visibleChanges, history, me, WINDOW_DAYS };
+  /** Histórico no "ver como": o da pessoa-alvo, recortado pelo que o ator também pode ver. */
+  function historyAs(state, actor, target, coll, opts = {}, env = {}, actorEnv = env) {
+    const t = history(state, target, coll, opts, env);
+    const { filter } = makeFilter(state, actor, { ...actorEnv, history: true });
+    const raw = KINDS[coll] === 'list' ? new Map(state[coll].map((d) => [d.id, d])) : null;
+    const items = [];
+    for (const it of t.items) {
+      const mine = filter(coll, it.id, raw ? raw.get(it.id) : state[coll][it.id]);
+      if (mine != null) items.push({ ...it, value: intersect(it.value, mine) });
+    }
+    return { items, more: t.more };
+  }
+
+  return { makeFilter, snapshot, preview, visibleChanges, history, historyAs, me, WINDOW_DAYS };
 });

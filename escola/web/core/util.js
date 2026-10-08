@@ -215,17 +215,23 @@
    * `label` é o nome do campo como o usuário o vê ("Nome do aluno").
    */
   const V = {
-    str(v, label, { required = false, max = 200, min = 0 } = {}) {
+    /** Texto de uma linha: sem caracteres de controle (quebras e tabulações viram espaço). */
+    str(v, label, { required = false, max = 200, min = 0, multiline = false } = {}) {
       if (v == null) v = '';
       if (typeof v !== 'string' && typeof v !== 'number') fail('invalid', `${label}: valor inválido.`);
-      const s = String(v).replace(/\s+$/g, '').replace(/^\s+/g, '');
+      let s = String(v);
+      s = multiline
+        ? s.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+        : s.replace(/[\u0000-\u001f\u007f]+/g, ' ');
+      s = s.replace(/\s+$/g, '').replace(/^\s+/g, '');
       if (required && !s) fail('invalid', `Preencha ${label.toLowerCase()}.`);
       if (s.length > max) fail('invalid', `${label} pode ter no máximo ${max} caracteres.`);
       if (s && s.length < min) fail('invalid', `${label} precisa ter pelo menos ${min} caracteres.`);
       return s;
     },
+    /** Texto de várias linhas: quebras normalizadas para \n, sem outros caracteres de controle. */
     text(v, label, opts = {}) {
-      return V.str(v, label, { max: 5000, ...opts });
+      return V.str(v, label, { max: 5000, ...opts, multiline: true });
     },
     num(v, label, { required = false, min = -Infinity, max = Infinity } = {}) {
       if (v === '' || v == null) {

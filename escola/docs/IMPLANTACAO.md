@@ -123,7 +123,13 @@ node --disable-warning=ExperimentalWarning server/index.js --reset-owner-passwor
 ```
 
 Mostra um código (72 h, uso único). Na tela de entrada: "Tenho um código de acesso". As outras contas
-recebem um novo código pela própria escola (Equipe e acessos → Gerar novo código).
+recebem um novo código pela própria escola (Equipe e acessos → Gerar novo código). Contas com acesso a
+atendimentos sigilosos (psicologia, psicopedagogia…) só recebem código de quem também tem esse acesso — ou do
+servidor, pelo e-mail ou celular da pessoa:
+
+```bash
+node --disable-warning=ExperimentalWarning server/index.js --reset-password=psicologa@escola.com.br
+```
 
 ## 9. Atualizar
 

@@ -52,6 +52,7 @@ const Store = (() => {
     }
     data = next;
     me = snap.me;
+    if (!preview) window.__cadernetaModo = !me ? undefined : me.family ? 'familia' : 'equipe'; // área desta aba (o servidor confere)
     reads = snap.reads || {};
     rev = Number(snap.rev) || 0;
     boot = snap.boot || null;
@@ -297,6 +298,7 @@ const Store = (() => {
       boot = null;
       preview = null;
       index = new Map();
+      window.__cadernetaModo = undefined;
       PageState.clear();
     },
   };
