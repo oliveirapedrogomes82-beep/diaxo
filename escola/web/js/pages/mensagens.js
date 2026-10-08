@@ -103,6 +103,38 @@
     olderMessages().forEach((m) => !ids.has(m.id) && list.push(m));
     return list;
   };
+  /** Motivo escrito pela família no aviso (o texto que ela digitou vem depois da frase automática). */
+  const noticeReason = (m) => {
+    const first = (m.posts || []).find((p) => p.kind !== 'registro');
+    const body = String((first && first.body) || '');
+    const cut = body.indexOf('\n\n');
+    const txt = (cut >= 0 ? body.slice(cut + 2) : body).replace(/\s+/g, ' ').trim();
+    return txt.length > 90 ? `${txt.slice(0, 89).trim()}…` : txt;
+  };
+  /**
+   * Avisos de falta e atestados das famílias que cobrem um dia (details.date ≤ dia ≤ details.until).
+   * Map studentId → {id, kind, reason, from, until, message}. Atestado vale mais que aviso; entre iguais, o mais recente.
+   * Usado pela chamada (destaque na linha do aluno e falta já sugerida) e pelo cartão do painel.
+   */
+  const absenceNotices = (date) => {
+    const out = new Map();
+    if (Store.family || !date) return out;
+    for (const m of Store.state.messages) {
+      if (m.kind !== 'falta' && m.kind !== 'atestado') continue;
+      const d = m.details || {};
+      if (!d.date) continue;
+      const until = d.until && d.until >= d.date ? d.until : d.date;
+      if (date < d.date || date > until) continue;
+      const prev = out.get(m.studentId);
+      if (prev) {
+        const better = (m.kind === 'atestado') !== (prev.kind === 'atestado') ? m.kind === 'atestado' : (m.createdAt || '') > (prev.message.createdAt || '');
+        if (!better) continue;
+      }
+      out.set(m.studentId, { id: m.id, kind: m.kind, reason: noticeReason(m), from: d.date, until, message: m });
+    }
+    return out;
+  };
+  Object.assign(Q, { absenceNotices });
   const postsOf = (m) => (Store.family ? (m.posts || []).filter((p) => p.kind !== 'registro') : m.posts || []);
   const lastPost = (m) => {
     const ps = postsOf(m);

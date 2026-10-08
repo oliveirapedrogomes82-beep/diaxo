@@ -228,6 +228,13 @@
 
 /* boletim */
 .pd-boletim { display: grid; gap: 14px; }
+.pd-bol-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+/* versão "para a família" (só etapas liberadas): só existe no papel */
+.pd-bol-fam { display: none; }
+.pd-bol-th-sub { display: block; font-size: .7rem; font-weight: 600; color: var(--fg-3); }
+.pd-bol-intmark { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; padding: 8px 12px; border: 2px solid var(--fg); border-radius: 6px; font-size: .9rem; }
+.pd-bol-intmark .i { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.pd-nrel-t { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
 .pd-bol-tools .grow { display: inline-flex; gap: 4px; align-items: center; }
 .pd-bol th, .pd-bol td { padding: 9px 10px; }
 .pd-bol td.center, .pd-bol th.center { text-align: center; }
@@ -300,7 +307,14 @@
 @media print {
   body.pd-printing main .page > :not(:has(.pd-boletim)) { display: none !important; }
   body.pd-printing .pd-boletim .card { border: 1px solid #bbb; }
-  .pd-boletim .pill::before, .pd-nrel { display: none; }
+  .pd-boletim .pill::before, .pd-nrel .i { display: none; }
+  .pd-nrel { display: block; margin: 0; color: var(--fg); }
+  /* com etapa não liberada, o papel padrão (inclusive Ctrl+P) é o da família; o completo só pelo botão "uso interno" */
+  .pd-bol-split .pd-bol-int { display: none !important; }
+  .pd-bol-split .pd-bol-fam { display: grid !important; }
+  body.pd-print-internal .pd-bol-split .pd-bol-int { display: grid !important; }
+  body.pd-print-internal .pd-bol-split .pd-bol-fam { display: none !important; }
+  .pd-bol-legend { margin-top: 0; color: var(--fg-2) !important; }
   .pd-bol .pill { background: none !important; padding: 0; color: #000 !important; }
   .pd-bol-ph { margin-bottom: 8px; }
   .pd-bol-foot > div { border-color: #bbb; }

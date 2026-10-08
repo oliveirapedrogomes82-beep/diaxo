@@ -647,6 +647,18 @@
   // =====================================================================
   // Ficha do aluno: Boletim
   // =====================================================================
+  /** "1º bimestre", "1º e 2º bimestres"… (rótulos das etapas, para avisos). */
+  const termsText = (list) => {
+    const names = list.map((t) => Q.termLabel(t));
+    return names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}` : names[0] || '';
+  };
+  /**
+   * Boletim da ficha do aluno. A tela mostra tudo o que a equipe enxerga (com as etapas não liberadas marcadas).
+   * Quando há etapa ainda não liberada às famílias, a impressão tem duas versões:
+   * - para a família (padrão, também no Ctrl+P): só as etapas liberadas, como o portal — média e situação
+   *   calculadas com elas, recuperação final só com a última etapa liberada, conselho só se liberado;
+   * - uso interno (botão próprio): tudo, com a marca "Uso interno — não entregar à família" no papel.
+   */
   const renderBoletim = (s) => {
     const c = Q.klass(s.classId);
     if (!c) return html`<section class="card">${UI.empty({ icon: 'grade', title: 'Sem turma', text: `${U.firstName(s.name)} não está em nenhuma turma ativa. O boletim aparece quando o aluno estiver numa turma.` })}</section>`;
@@ -655,6 +667,9 @@
     const parecer = Q.evaluation(c.id) === 'parecer';
     const att = Q.attendanceRate(s.id);
     const co = Q.council(s.id);
+    const rel = terms.filter((t) => Q.termReleased(t));
+    const nrel = terms.filter((t) => !Q.termReleased(t));
+    const split = nrel.length > 0;
     const recs = Q.attendanceRecords ? Q.attendanceRecords(s.id) : [];
     const bySub = new Map();
     recs.forEach((r) => {
@@ -664,58 +679,98 @@
       x.lessons++;
       x[r.mark]++;
     });
-    const termHead = (t) => html`<th class="center">${Q.termLabel(t, { short: true })}${!Q.termReleased(t) ? html`<span class="pd-nrel" title="Ainda não liberado às famílias">${icon('eyeOff')}</span>` : ''}</th>`;
-    const printHead = html`<div class="print-only pd-bol-ph"><div class="boletim-head"><div><h2>${st.schoolName || 'Escola'}</h2><div class="small">${[st.address, st.phone].filter(Boolean).join(' · ')}</div></div><div class="pd-bol-ph-r"><b>Boletim escolar ${Q.year()}</b><div class="small">Emitido em ${U.fmtDate(U.today())}</div></div></div>
+    const subs = parecer ? [] : Q.classSubjects(c.id);
+    if (!parecer && !subs.length) return html`<section class="card">${UI.empty({ icon: 'book', title: 'Turma sem disciplinas', text: 'O boletim aparece quando a turma tiver disciplinas.' })}</section>`;
+
+    /** Linhas de notas: fam=true considera só as etapas liberadas (o que a família vê no portal). */
+    const lastReleased = Q.termReleased(terms[terms.length - 1]);
+    const rowsOf = (fam) =>
+      subs.map((x) => {
+        const cells = terms.map((t) => {
+          if (fam && !Q.termReleased(t)) return { t, locked: true };
+          return { t, g: Q.grade(s.id, x.id, t), rec: Q.grade(s.id, x.id, 'rec' + t), tg: Q.termGrade(s.id, x.id, t) };
+        });
+        const avg = fam ? U.avg(cells.filter((cl) => !cl.locked).map((cl) => cl.tg)) : Q.subjectAverage(s.id, x.id);
+        const rf = !fam || lastReleased ? Q.grade(s.id, x.id, 'rf') : null;
+        const fin = fam ? (rf != null && avg != null && avg < st.passing ? Math.max(avg, rf) : avg) : Q.subjectFinal(s.id, x.id);
+        const complete = fam ? cells.every((cl) => !cl.locked && cl.tg != null) : R.termsWithGrade(Store.state.grades, st, Q.year(), s.id, x.id) === terms.length;
+        return { x, cells, avg, rf, fin, sit: Q.situation(fin, complete) };
+      });
+
+    const printHead = (kind) => html`<div class="print-only pd-bol-ph"><div class="boletim-head"><div><h2>${st.schoolName || 'Escola'}</h2><div class="small">${[st.address, st.phone].filter(Boolean).join(' · ')}</div></div><div class="pd-bol-ph-r"><b>Boletim escolar ${Q.year()}${kind === 'int' ? ' · uso interno' : ''}</b><div class="small">Emitido em ${U.fmtDate(U.today())}</div></div></div>
+      ${kind === 'int' ? html`<p class="pd-bol-intmark">${icon('eyeOff')}<span><b>Uso interno da escola — não entregar à família.</b> Inclui ${nrel.length > 1 ? 'etapas' : 'etapa'} ainda não ${nrel.length > 1 ? 'liberadas' : 'liberada'} às famílias: ${termsText(nrel)}.</span></p>` : ''}
       <dl class="summary pd-bol-id"><dt>Aluno(a)</dt><dd>${s.name}</dd><dt>Matrícula</dt><dd>${s.enrollment}</dd><dt>Turma</dt><dd>${c.name}${c.shift ? ` · ${c.shift}` : ''}</dd></dl></div>`;
-    const foot = html`<div class="pd-bol-foot">
-      <div><span class="small muted">Frequência no ano</span><b class="pd-t-${Q.attTone(att, c.id)}">${U.pct(att)}</b><span class="small muted">mínimo ${Q.minAttendance(c.id)}%</span></div>
-      ${parecer ? '' : html`<div><span class="small muted">Média geral</span><b class="${tone(Q.studentAverage(s.id, c.id))}">${U.num(Q.studentAverage(s.id, c.id))}</b><span class="small muted">aprovação com ${U.num(st.passing)}</span></div>`}
-      <div><span class="small muted">Conselho de classe</span>${co ? html`<b>${COUNCIL[co.result].label}</b>${co.note ? html`<span class="small muted">${co.note}</span>` : ''}${!co.released ? html`<span class="small muted">não liberado às famílias</span>` : ''}` : html`<b class="muted">—</b>`}</div>
-    </div>`;
-    const tools = html`<div class="toolbar no-print pd-bol-tools"><span class="grow small muted">${c.name} · ano letivo ${Q.year()}</span><button type="button" class="btn" data-bol-print>${icon('printer')}Imprimir boletim</button></div>`;
-    const legend = html`<p class="small muted no-print pd-bol-legend">${icon('eyeOff', 'pd-inline-ic')} etapa ainda não liberada às famílias${parecer ? '' : ' · vale a maior nota entre a da etapa e a da recuperação (rec.)'}</p>`;
-    const sigs = html`<div class="print-only"><div class="signatures"><div>Direção / Secretaria</div><div>Responsável</div></div></div>`;
-    if (parecer) {
-      return html`<div class="pd-boletim">${printHead}${tools}
-        <div class="stack pd-bol-par">${terms.map((t) => {
-          const txt = Q.grade(s.id, '_parecer', t);
-          return html`<section class="card card-pad"><div class="pd-bol-par-h"><h3>${U.cap(Q.termLabel(t))}</h3>${!Q.termReleased(t) ? html`<span class="pill plain no-print">${icon('eyeOff')}não liberado</span>` : ''}</div><p class="pd-pre">${txt || html`<span class="muted">Ainda não escrito.</span>`}</p></section>`;
-        })}</div>${legend}${foot}${sigs}</div>`;
-    }
-    const subs = Q.classSubjects(c.id);
-    if (!subs.length) return html`<section class="card">${UI.empty({ icon: 'book', title: 'Turma sem disciplinas', text: 'O boletim aparece quando a turma tiver disciplinas.' })}</section>`;
-    const anySubAtt = bySub.size > 0;
-    return html`<div class="pd-boletim">${printHead}${tools}
-      <section class="card"><div class="table-wrap"><table class="table pd-bol">
-        <thead><tr><th>Disciplina</th>${terms.map(termHead)}<th class="center">Média</th><th class="center">Final</th>${anySubAtt ? html`<th class="center">Faltas</th><th class="center">Freq.</th>` : ''}<th>Situação</th></tr></thead>
-        <tbody>${subs.map((x) => {
-          const avg = Q.subjectAverage(s.id, x.id);
-          const rf = Q.grade(s.id, x.id, 'rf');
-          const fin = Q.subjectFinal(s.id, x.id);
-          const complete = R.termsWithGrade(Store.state.grades, st, Q.year(), s.id, x.id) === terms.length;
-          const sit = Q.situation(fin, complete);
-          const a = bySub.get(x.id);
+    const sigs = (kind) => html`<div class="print-only"><div class="signatures"><div>Direção / Secretaria</div>${kind === 'int' ? '' : html`<div>Responsável</div>`}</div></div>`;
+
+    const foot = (fam) => {
+      const showCo = co && COUNCIL[co.result] && (!fam || co.released);
+      const avgAll = fam ? U.avg(rowsOf(true).map((r) => r.avg)) : Q.studentAverage(s.id, c.id);
+      return html`<div class="pd-bol-foot">
+        <div><span class="small muted">Frequência no ano</span><b class="pd-t-${Q.attTone(att, c.id)}">${U.pct(att)}</b><span class="small muted">mínimo ${Q.minAttendance(c.id)}%</span></div>
+        ${parecer ? '' : html`<div><span class="small muted">Média geral${fam && split ? ' (parcial)' : ''}</span><b class="${tone(avgAll)}">${U.num(avgAll)}</b><span class="small muted">aprovação com ${U.num(st.passing)}</span></div>`}
+        <div><span class="small muted">Conselho de classe</span>${showCo ? html`<b>${COUNCIL[co.result].label}</b>${co.note ? html`<span class="small muted">${co.note}</span>` : ''}${!co.released ? html`<span class="small muted">não liberado às famílias</span>` : ''}` : html`<b class="muted">—</b>`}</div>
+      </div>`;
+    };
+    const recNote = parecer ? '' : 'vale a maior nota entre a da etapa e a da recuperação (rec.)';
+    const legend = (kind) => {
+      if (kind === 'fam') return html`<p class="small muted pd-bol-legend"><span>— etapa ainda não liberada pela escola${parecer ? '' : '; média e situação consideram só as etapas liberadas'}${recNote ? ` · ${recNote}` : ''}.</span></p>`;
+      if (kind === 'int') return html`<p class="small muted pd-bol-legend">${icon('eyeOff', 'pd-inline-ic')}<span>etapa ainda não liberada às famílias${recNote ? ` · ${recNote}` : ''}</span></p>`;
+      return recNote ? html`<p class="small muted pd-bol-legend"><span>${U.cap(recNote)}.</span></p>` : '';
+    };
+    const nrelMark = html`<span class="pd-nrel" role="img" aria-label="ainda não liberado às famílias" title="Ainda não liberado às famílias">${icon('eyeOff')}<span class="print-only pd-nrel-t">não liberado</span></span>`;
+
+    /** Corpo do boletim: kind 'int' (tudo, com marcas), 'fam' (só o liberado) ou 'all' (tudo liberado: um só). */
+    const body = (kind) => {
+      const fam = kind === 'fam';
+      if (parecer) {
+        return html`<div class="stack pd-bol-par">${terms.map((t) => {
+          const ok = Q.termReleased(t);
+          const txt = fam && !ok ? null : Q.grade(s.id, '_parecer', t);
+          return html`<section class="card card-pad"><div class="pd-bol-par-h"><h3>${U.cap(Q.termLabel(t))}</h3>${!ok && !fam ? html`<span class="pill plain pd-nrel-pill">${icon('eyeOff')}não liberado</span>` : ''}</div>${
+            fam && !ok ? html`<p class="muted">Etapa ainda não liberada pela escola.</p>` : html`<p class="pd-pre">${txt || html`<span class="muted">Ainda não escrito.</span>`}</p>`
+          }</section>`;
+        })}</div>`;
+      }
+      const rows = rowsOf(fam);
+      const anySubAtt = bySub.size > 0;
+      return html`<section class="card"><div class="table-wrap"><table class="table pd-bol">
+        <caption class="sr-only">Notas de ${s.name} por disciplina e etapa${fam ? ' (só etapas liberadas às famílias)' : ''}</caption>
+        <thead><tr><th>Disciplina</th>${terms.map((t) => html`<th class="center">${Q.termLabel(t, { short: true })}${!Q.termReleased(t) && !fam ? nrelMark : ''}</th>`)}<th class="center">Média${fam && split ? html`<span class="pd-bol-th-sub">parcial</span>` : ''}</th><th class="center">Final</th>${anySubAtt ? html`<th class="center">Faltas</th><th class="center">Freq.</th>` : ''}<th>Situação</th></tr></thead>
+        <tbody>${rows.map((r) => {
+          const a = bySub.get(r.x.id);
           const rate = a ? R.rateOf(a) : null;
-          return html`<tr><td><span class="subject-tag"><span class="swatch c${x.color}"></span>${x.name}</span></td>
-            ${terms.map((t) => {
-              const g = Q.grade(s.id, x.id, t);
-              const rec = Q.grade(s.id, x.id, 'rec' + t);
-              const tg = Q.termGrade(s.id, x.id, t);
-              return html`<td class="center num ${tone(tg)}">${U.num(tg)}${rec != null ? html`<span class="pd-bol-rec" title="Nota da etapa ${fmt(g) || '—'} · recuperação ${fmt(rec)}">nota ${fmt(g) || '—'} · rec. ${fmt(rec)}</span>` : ''}</td>`;
-            })}
-            <td class="center num"><b class="${tone(avg)}">${U.num(avg)}</b></td>
-            <td class="center num ${tone(rf)}">${rf != null ? U.num(rf) : html`<span class="muted">—</span>`}</td>
+          return html`<tr><td><span class="subject-tag"><span class="swatch c${r.x.color}"></span>${r.x.name}</span></td>
+            ${r.cells.map((cl) =>
+              cl.locked
+                ? html`<td class="center"><span class="muted" title="Ainda não liberado">—</span></td>`
+                : html`<td class="center num ${tone(cl.tg)}">${U.num(cl.tg)}${cl.rec != null ? html`<span class="pd-bol-rec" title="Nota da etapa ${fmt(cl.g) || '—'} · recuperação ${fmt(cl.rec)}">nota ${fmt(cl.g) || '—'} · rec. ${fmt(cl.rec)}</span>` : ''}</td>`,
+            )}
+            <td class="center num"><b class="${tone(r.avg)}">${U.num(r.avg)}</b></td>
+            <td class="center num ${tone(r.rf)}">${r.rf != null ? U.num(r.rf) : html`<span class="muted">—</span>`}</td>
             ${anySubAtt ? html`<td class="center num">${a ? a.F + a.J : html`<span class="muted">—</span>`}</td><td class="center num"><span class="pd-t-${Q.attTone(rate, c.id)}">${U.pct(rate)}</span></td>` : ''}
-            <td>${sit.tone ? UI.pill(sit.label, sit.tone) : html`<span class="muted small">—</span>`}</td></tr>`;
-        })}</tbody></table></div></section>
-      ${legend}${foot}${sigs}</div>`;
+            <td>${r.sit.tone ? UI.pill(r.sit.label, r.sit.tone) : html`<span class="muted small">—</span>`}</td></tr>`;
+        })}</tbody></table></div></section>`;
+    };
+
+    const tools = html`<div class="toolbar no-print pd-bol-tools"><span class="grow small muted">${c.name} · ano letivo ${Q.year()}</span>${split
+      ? html`<button type="button" class="btn" data-bol-print="fam">${icon('printer')}Imprimir para a família</button><button type="button" class="btn ghost" data-bol-print="int">${icon('eyeOff')}Imprimir uso interno</button>`
+      : html`<button type="button" class="btn" data-bol-print="fam">${icon('printer')}Imprimir boletim</button>`}</div>`;
+    if (!split) return html`<div class="pd-boletim">${tools}<div class="pd-bol-view">${printHead('all')}${body('all')}${legend('all')}${foot(false)}${sigs('all')}</div></div>`;
+    const info = html`<div class="notice no-print pd-bol-info">${icon('info')}<span class="grow">${nrel.length > 1 ? `As etapas ${termsText(nrel)} ainda não foram liberadas` : `O ${termsText(nrel)} ainda não foi liberado`} às famílias. A impressão para a família leva só as etapas liberadas, como no portal; a de uso interno leva tudo.</span></div>`;
+    return html`<div class="pd-boletim pd-bol-split">${tools}${info}
+      <div class="pd-bol-view pd-bol-int">${printHead('int')}${body('int')}${legend('int')}${foot(false)}${sigs('int')}</div>
+      <div class="pd-bol-view pd-bol-fam">${printHead('fam')}${body('fam')}${legend('fam')}${foot(true)}${sigs('fam')}</div>
+    </div>`;
   };
   const mountBoletim = (el) => {
     el.addEventListener('click', (e) => {
-      if (!e.target.closest('[data-bol-print]')) return;
+      const b = e.target.closest('[data-bol-print]');
+      if (!b) return;
+      const internal = b.dataset.bolPrint === 'int';
       document.body.classList.add('pd-printing');
+      document.body.classList.toggle('pd-print-internal', internal);
       const done = () => {
-        document.body.classList.remove('pd-printing');
+        document.body.classList.remove('pd-printing', 'pd-print-internal');
         window.removeEventListener('afterprint', done);
       };
       window.addEventListener('afterprint', done);
