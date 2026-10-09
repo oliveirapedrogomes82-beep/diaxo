@@ -1,10 +1,12 @@
 'use strict';
 /* Monta um HTML único e autossuficiente da demonstração (CSS, fontes e scripts embutidos), para publicar
-   como página estática. Uso: node tools/build-artifact.js [saida.html]  (padrão: dist/caderneta-demo.html) */
+   como página estática. Uso: node tools/build-artifact.js [saida.html] [--fragment]  (padrão: dist/caderneta-demo.html) */
 const fs = require('node:fs');
 const path = require('node:path');
 const WEB = path.join(__dirname, '..', 'web');
-const out = path.resolve(process.argv[2] || path.join(__dirname, '..', 'dist', 'caderneta-demo.html'));
+const argv = process.argv.slice(2);
+const fragment = argv.includes('--fragment'); // sem doctype/html/head/body (para publicar numa página que já tem o esqueleto)
+const out = path.resolve(argv.find((a) => !a.startsWith('--')) || path.join(__dirname, '..', 'dist', 'caderneta-demo.html'));
 
 const read = (rel) => fs.readFileSync(path.join(WEB, rel), 'utf8');
 const html = read('demo.html');
@@ -22,6 +24,19 @@ let bundled = html
   .replace(/<link rel="stylesheet" href="([^"]+)">/g, (_, href) => css(href))
   .replace(/<script src="([^"]+)"><\/script>/g, (_, src) => js(src));
 if (/<script src=|<link rel="stylesheet" href=/.test(bundled)) throw new Error('sobrou referência externa');
+if (fragment) {
+  bundled = bundled
+    .replace(/<!doctype html>\s*/i, '')
+    .replace(/<html[^>]*>\s*/i, '')
+    .replace(/<\/html>\s*$/i, '')
+    .replace(/<head>\s*/i, '')
+    .replace(/<\/head>\s*/i, '')
+    .replace(/<body>\s*/i, '')
+    .replace(/<\/body>\s*/i, '')
+    .replace(/<meta charset="utf-8">\s*/i, '')
+    .replace(/<meta name="viewport"[^>]*>\s*/i, '')
+    .replace(/<title>[^<]*<\/title>/i, '<title>Caderneta Escolar</title>');
+}
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, bundled);
 console.log(`${out} (${(bundled.length / 1024).toFixed(0)} KB)`);
