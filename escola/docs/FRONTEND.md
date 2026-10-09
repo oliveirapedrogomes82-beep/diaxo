@@ -104,7 +104,8 @@ do campo. Por isso:
   `agenda-pendente` (família), `alertas-saude`, `aniversariantes`, `chamadas-pendentes`, `faltas-seguidas`,
   `notas-pendentes`, `equipe-acessos`, `mensagens-abertas`, `mensagens-familia` (família), `atendimentos-recentes`,
   `apoio-familia` (família: plano de apoio com "Li e estou ciente"), `proximos-eventos` e `comunicados-fixados`
-  (equipe e família), `financeiro-mes`, `primeiros-passos` (titular, escola vazia). O host é
+  (equipe e família), `financeiro-mes`, `primeiros-passos` (titular, escola vazia), `rotina-hoje`. Um widget pode
+  definir `primary()` → true para subir ao topo do painel (ex.: a área de trabalho principal do cargo). O host é
   `PainelKit.widgetGrid(defs, {cls, merge})` + `PainelKit.mountWidgets(el)` (painel da equipe e início da família).
 - Rotas profundas: `#configuracoes/<seção>` (escola, ano, etapas, disciplinas, agenda, financeiro, privacidade,
   acessos, virada, backup), `#relatorios/<relatório>`, `#boletim/<filho>`, `#filhos/<filho>`, `#mensagens/<id>`,
@@ -125,6 +126,8 @@ do campo. Por isso:
   `novaMensagem({studentId, kind?})` (equipe ou família), `abrirMensagem(id)`, `novoAtendimento({studentId})`,
   `novoPlanoApoio({studentId})`, `abrirAtendimento(id)`, `novoEvento({date, classId, type})`, `verCalendario(date)`,
   `novoComunicado()`, `receber(invoiceId)`, `gerarMensalidades()`.
+- Ações de agenda, chamada e notas usam `when` e somem quando não há turma ou alunos. Outras consultas do painel:
+  `Q.relevantEvents`, `Q.eventWhere`, `Q.genderOf`, `Q.byGender`, `Q.gradeText`; `ComKit.whereLabel`, `ComKit.audienceText`.
 - **Consultas extras** (de `turmas.js`): `Q.canTakeLesson`, `Q.rollsToDo(date)` → `[{klass, missing}]`,
   `Q.rollState`, `Q.absenceStreaks`, `Q.absenceAlert`, `Q.studentAverage`, `Q.classStats`,
   `Q.subjectAttendance`, `Q.atRisk`, `Q.attendanceRecords`, `Q.homeroom`, `Q.gradeTone`.

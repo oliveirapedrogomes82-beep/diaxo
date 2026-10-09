@@ -150,11 +150,21 @@
     return html`<div class="class-strip pd-strip" role="group" aria-label="Turmas">${list.map((c) => {
       const st = Q.rollState(c.id, v.date);
       const done = st.total > 0 && st.done === st.total;
-      const part = st.done > 0 && !done;
+      // Aulas sem chamada que eu mesmo posso registrar: só elas ganham o amarelo de pendência (como o selo do menu).
+      const mine = done ? 0 : Q.periods(c.id, v.date).filter((p) => !Q.attendance(c.id, v.date, p.period) && Q.canTakeLesson(c.id, p.period, p.subjectId)).length;
+      const multi = st.total > 1 && !done;
       const hasDraft = Object.keys(v.drafts).some((k) => k.startsWith(`${c.id}|${v.date}|`) && isDirty(Q.attendance(c.id, v.date, Number(k.split('|')[2])), v.drafts[k]));
-      const title = !st.total ? 'Sem aula neste dia' : done ? 'Chamada registrada' : part ? `${st.done} de ${st.total} aulas registradas` : 'Sem chamada';
+      const yours = mine ? (st.total > 1 ? ` · ${U.plural(mine, 'aula sua pendente', 'aulas suas pendentes')}` : ' · pendente para você') : '';
+      const title = !st.total ? 'Sem aula neste dia' : done ? (st.total > 1 ? `Todas as ${st.total} aulas registradas` : 'Chamada registrada') : multi ? `${st.done} de ${st.total} aulas registradas${yours}` : `Sem chamada${yours}`;
+      const mark = !st.total
+        ? ''
+        : done
+          ? html`<span class="state done" aria-hidden="true">${icon('check')}</span>`
+          : multi
+            ? html`<span class="pd-prog ${mine ? 'mine' : ''}" aria-hidden="true">${st.done}/${st.total}</span>`
+            : html`<span class="state ${mine ? 'pd-mine' : ''}" aria-hidden="true"></span>`;
       return html`<button type="button" class="chip" data-ch-class="${c.id}" aria-pressed="${tf(c.id === v.classId)}" title="${title}">
-        <span class="state ${done ? 'done' : part ? 'pd-part' : ''}" aria-hidden="true">${done ? icon('check') : part ? html`<b>${st.done}</b>` : ''}</span>${c.name}${hasDraft ? html`<span class="pd-draft-dot" title="Alterações não salvas"></span>` : ''}<span class="sr-only">: ${title}</span></button>`;
+        ${multi ? '' : mark}${c.name}${multi ? mark : ''}${hasDraft ? html`<span class="pd-draft-dot" title="Alterações não salvas"></span>` : ''}<span class="sr-only">: ${title}</span></button>`;
     })}</div>`;
   };
 
@@ -226,18 +236,33 @@
   const countsHTML = (n, showJA) =>
     html`<span><span class="dot-ok"></span><b>${n.P}</b> ${n.P === 1 ? 'presente' : 'presentes'}</span><span><span class="dot-bad"></span><b>${n.F}</b> ${n.F === 1 ? 'falta' : 'faltas'}</span>${showJA || n.J ? html`<span><span class="dot-warn"></span><b>${n.J}</b> ${n.J === 1 ? 'justificada' : 'justificadas'}</span>` : ''}${showJA || n.A ? html`<span><span class="pd-dot-info"></span><b>${n.A}</b> ${n.A === 1 ? 'abonada' : 'abonadas'}</span>` : ''}`;
 
+  /** Sem turma com alunos: quem monta as turmas (escopo "todas" ou turmas.gerenciar) recebe o caminho; os demais, "peça à coordenação". */
+  const emptyNoRoster = () => {
+    const anyClass = Q.classes().length > 0;
+    if (Store.me.scope === 'todas' || can('turmas.gerenciar')) {
+      const mk = !anyClass && can('turmas.gerenciar') && typeof Actions.novaTurma === 'function';
+      const enroll = anyClass && can('alunos.cadastrar') && typeof Actions.matricular === 'function';
+      return UI.empty({
+        icon: 'checkSquare',
+        title: anyClass ? 'Nenhum aluno matriculado ainda' : 'Ainda não há turmas com alunos',
+        text: anyClass ? 'As turmas ainda não têm alunos. Matricule os alunos para fazer a chamada.' : mk ? 'Crie as turmas e matricule os alunos para fazer a chamada.' : 'Quando as turmas forem criadas e os alunos matriculados, a chamada aparece aqui.',
+        action: html`${mk ? html`<button type="button" class="btn primary" data-ch-setup="turma">Criar turma</button>` : ''}${enroll ? html`<button type="button" class="btn primary" data-ch-setup="aluno">Matricular aluno</button>` : ''}${anyClass && Store.canAny('turmas.ver', 'turmas.gerenciar') ? html`<a class="btn" href="#turmas">Ver turmas</a>` : ''}`,
+      });
+    }
+    return UI.empty({
+      icon: 'checkSquare',
+      title: 'Nenhuma turma com alunos',
+      text: can('chamada.registrar') ? 'Você ainda não está em nenhuma turma com alunos. Peça à coordenação para incluir você na equipe da turma.' : 'Quando houver turmas com alunos, a chamada aparece aqui.',
+      action: anyClass && Store.canAny('turmas.ver', 'turmas.gerenciar') ? html`<a class="btn primary" href="#turmas">Ver turmas</a>` : '',
+    });
+  };
+
   const render = (rest) => {
     const { v, list } = resolve(rest);
     const T = U.today();
     const registrar = can('chamada.registrar');
     const head = (lead) => html`<div class="page-head"><div><h1>Chamada</h1><p class="lead">${lead}</p></div>${list.length ? dateNav(v) : ''}</div>`;
-    if (!list.length)
-      return html`${head('')}<section class="card">${UI.empty({
-        icon: 'checkSquare',
-        title: 'Nenhuma turma com alunos',
-        text: registrar ? 'Você ainda não está em nenhuma turma com alunos. Peça à coordenação para incluir você na equipe da turma.' : 'Quando houver turmas com alunos, a chamada aparece aqui.',
-        action: Store.canAny('turmas.ver', 'turmas.gerenciar') ? html`<a class="btn primary" href="#turmas">Ver turmas</a>` : '',
-      })}</section>`;
+    if (!list.length) return html`${head('')}<section class="card">${emptyNoRoster()}</section>`;
     const c = Q.klass(v.classId);
     const mode = Q.attendanceMode(c.id);
     const wd = U.weekday(v.date);
@@ -347,7 +372,14 @@
   // =====================================================================
   const mount = (el, rest) => {
     const { v, list } = resolve(rest);
-    if (!list.length || !v.classId) return;
+    if (!list.length || !v.classId) {
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ch-setup]');
+        if (b && b.dataset.chSetup === 'turma') Actions.novaTurma();
+        else if (b) Actions.matricular({});
+      });
+      return;
+    }
     const c = Q.klass(v.classId);
     const T = U.today();
     const lessons = Q.periods(c.id, v.date);
@@ -855,5 +887,5 @@
 
   App.studentTab({ id: 'frequencia', label: 'Frequência', order: 25, perm: 'chamada.ver', render: renderFreq, mount: mountFreq });
 
-  App.action({ id: 'fazer-chamada', label: 'Fazer chamada', icon: 'checkSquare', order: 20, perm: 'chamada.registrar', keys: 'presença falta lista', run: () => Actions.fazerChamada(null) });
+  App.action({ id: 'fazer-chamada', label: 'Fazer chamada', icon: 'checkSquare', order: 20, perm: 'chamada.registrar', keys: 'presença falta lista', when: () => Q.workClasses().some((c) => Q.roster(c.id).length), run: () => Actions.fazerChamada(null) });
 })();

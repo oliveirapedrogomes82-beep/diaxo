@@ -1185,7 +1185,8 @@
     render() {
       const open = Q.openMessages().slice().sort((a, b) => lastAt(a).localeCompare(lastAt(b)));
       const T = today();
-      const exits = Store.state.messages.filter((m) => (m.kind === 'busca' || m.kind === 'saida') && m.details && m.details.date === T).sort((a, b) => ((a.details.time || '') < (b.details.time || '') ? -1 : 1));
+      // saídas antecipadas pelo horário; as buscas (sem horário, na saída normal) depois
+      const exits = Store.state.messages.filter((m) => (m.kind === 'busca' || m.kind === 'saida') && m.details && m.details.date === T).sort((a, b) => (a.details.time || '99').localeCompare(b.details.time || '99'));
       const shown = open.slice(0, 5);
       return html`<section class="card mg-widget">
         <div class="card-head"><h2>${icon('inbox')}Mensagens das famílias</h2><a class="sub" href="#mensagens">${open.length ? `${open.length} para responder` : 'Abrir caixa'}</a></div>
@@ -1193,7 +1194,17 @@
           ${exits.length
             ? html`<div class="mg-w-exits"><b class="small">${icon('door')}Saídas e buscas de hoje</b><ul>${exits.map((m) => {
                 const s = studentOf(m);
-                return html`<li><a href="#mensagens/${m.id}"><span class="num">${m.details.time ? m.details.time.replace(':', 'h') : '—'}</span><span class="grow">${s ? U.shortName(s.name) : 'Aluno'}${className(s) ? html` <span class="muted">· ${className(s)}</span>` : ''}</span><span class="muted small">${m.details.person || ''}</span></a></li>`;
+                const d = m.details;
+                const time = d.time ? d.time.replace(':', 'h') : '';
+                // saída antecipada tem horário; "outra pessoa busca" acontece no horário normal da turma
+                const what = m.kind === 'saida' ? (d.person ? 'Sai mais cedo com' : 'Sai mais cedo') : d.person ? 'Quem vem buscar:' : 'Outra pessoa vem buscar';
+                return html`<li><a href="#mensagens/${m.id}">
+                  <span class="mg-w-when ${time ? 'num' : 'is-kind'}">${time || 'Busca'}</span>
+                  <span class="mg-w-exit">
+                    <span class="mg-w-kid">${s ? U.shortName(s.name) : 'Aluno'}${className(s) ? html` <span class="muted">· ${className(s)}</span>` : ''}</span>
+                    <span class="mg-w-who small"><span class="muted">${what}</span>${d.person ? html` <b>${d.person}</b>` : ''}</span>
+                  </span>
+                </a></li>`;
               })}</ul></div>`
             : ''}
           ${shown.length

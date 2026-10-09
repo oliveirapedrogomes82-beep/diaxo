@@ -130,8 +130,26 @@
     if (!(a.classIds || []).length && !(a.segments || []).length) return 'Toda a escola';
     const cmap = Q.classesById();
     const kids = Q.myChildren().filter((s) => s.classId && R.audienceTouches(a, [s.classId], cmap));
-    if (!kids.length) return Q.audienceLabel(a).replace(/^[^·]*·\s*/, '');
+    if (!kids.length) return whereLabel(a, cmap) || 'Toda a escola';
     return kids.map((s) => `${U.firstName(s.name)} (${(Q.klass(s.classId) || {}).name || 'turma'})`).join(', ');
+  };
+
+  /** Onde vale o público, por extenso ("6º ano A", "Educação Infantil"); '' = escola toda.
+      Turma que a pessoa não enxerga vira "outra turma" (nunca "escola toda"). */
+  const whereLabel = (aud, cmap = Q.classesById()) => {
+    const a = aud || {};
+    const ids = a.classIds || [];
+    const parts = ids.map((id) => (cmap.get(id) || {}).name).filter(Boolean).concat(a.segments || []);
+    const unknown = ids.filter((id) => !cmap.has(id)).length;
+    if (unknown) parts.push(parts.length ? U.plural(unknown, 'turma', 'turmas') : unknown === 1 ? 'outra turma' : `${unknown} outras turmas`);
+    if (parts.length > 3) return `${parts.slice(0, 2).join(', ')} e mais ${parts.length - 2}`;
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}` : parts[0] || '';
+  };
+  /** Público para a equipe: "Todos · 6º ano A", "Só a equipe · escola toda". */
+  const audienceText = (aud) => {
+    const a = aud || {};
+    const who = { todos: 'Todos', familias: 'Famílias', equipe: 'Só a equipe' }[a.who] || 'Todos';
+    return `${who} · ${whereLabel(a) || 'escola toda'}`;
   };
 
   /** Tira a mensagem de erro do campo assim que a pessoa corrige. */
@@ -149,7 +167,7 @@
     form.addEventListener('change', clear);
   };
 
-  window.ComKit = { liveClear, allScope, publishClasses, canManage, audienceField, audienceValue, readAudience, bindAudience, familyTarget, WHO };
+  window.ComKit = { liveClear, allScope, publishClasses, canManage, audienceField, audienceValue, readAudience, bindAudience, familyTarget, whereLabel, audienceText, WHO };
 
   // =====================================================================
   // Datas e eventos
@@ -161,6 +179,25 @@
   const dateChip = (d) => html`<span class="date-chip ${d === today() ? 'today' : ''}"><b>${dayNum(d)}</b><span>${monShort(d)}</span></span>`;
   const byWhen = (a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')) || String(a.title).localeCompare(String(b.title), 'pt-BR');
   const event = (id) => Store.byId('events', id);
+
+  /** Turmas que interessam a quem vê (null = todas): família → turmas dos filhos; equipe que vê a escola → todas;
+      coordenação de etapas → as turmas visíveis; demais (vínculos) → as próprias turmas. */
+  const relevantScope = () => {
+    if (Store.family) return { ids: Q.myChildren().map((s) => s.classId).filter(Boolean), segs: new Set() };
+    const m = me();
+    if (!m || m.scope === 'todas') return null;
+    const list = m.scope === 'segmentos' ? Q.classes() : Q.myClasses();
+    return { ids: list.map((c) => c.id), segs: new Set(m.scope === 'segmentos' ? m.segments || [] : []) };
+  };
+  const touchesScope = (e, sc, cmap) => !sc || R.audienceTouches(e.audience, sc.ids, cmap) || ((e.audience && e.audience.segments) || []).some((x) => sc.segs.has(x));
+  /** Eventos de um período que dizem respeito a quem vê: os da escola toda e os das suas turmas/etapas
+      (para quem vê a escola inteira, todos). Os de outras turmas continuam no Calendário. */
+  const relevantEvents = (from = today(), to = '') => {
+    const sc = relevantScope();
+    const cmap = Q.classesById();
+    return Store.state.events.filter((e) => e.date >= from && (!to || e.date <= to) && touchesScope(e, sc, cmap)).sort(byWhen);
+  };
+  Object.assign(Q, { relevantEvents, eventWhere: (e) => whereLabel(e && e.audience) });
   /** Feriado nacional do dia (o da escola é um evento do tipo "feriado"). */
   const national = (d) => U.holidayName(d);
 
@@ -227,7 +264,7 @@
       lines.push(`DTSTART:${d}T${String(h).padStart(2, '0')}${String(m).padStart(2, '0')}00`, `DTEND:${d}T${String(endH).padStart(2, '0')}${String(endH === h ? 59 : m).padStart(2, '0')}00`);
     } else lines.push(`DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${U.addDays(e.date, 1).replace(/-/g, '')}`);
     lines.push(`SUMMARY:${icsEsc(`${e.title} (${school})`)}`);
-    const desc = [evType(e.type).label, Store.family ? familyTarget(e.audience) : Q.audienceLabel(e.audience), e.notes].filter(Boolean).join('\n');
+    const desc = [evType(e.type).label, Store.family ? familyTarget(e.audience) : audienceText(e.audience), e.notes].filter(Boolean).join('\n');
     lines.push(`DESCRIPTION:${icsEsc(desc)}`, 'END:VEVENT', 'END:VCALENDAR');
     U.download(`${U.slug(e.title) || 'evento'}-${e.date}.ics`, lines.map(icsFold).join('\r\n') + '\r\n', 'text/calendar;charset=utf-8');
     UI.toast('Arquivo do evento baixado. Abra para adicionar ao seu calendário.', { ic: 'calendar' });
@@ -236,7 +273,13 @@
   // =====================================================================
   // Peças da tela
   // =====================================================================
-  const targetLine = (e) => (Store.family ? familyTarget(e.audience) : Q.audienceLabel(e.audience));
+  const targetLine = (e) => (Store.family ? familyTarget(e.audience) : audienceText(e.audience));
+  /** Complemento curto das listas "Próximos": de que turma/etapa é (nada quando é da escola toda). */
+  const whereBit = (e) => {
+    if (e.hol) return '';
+    const w = Store.family ? (whereLabel(e.audience) ? familyTarget(e.audience) : '') : whereLabel(e.audience);
+    return w ? ` · ${w}` : '';
+  };
   const eventItem = (e, { showDate = false } = {}) => {
     const t = evType(e.type);
     const manage = canManage(e, 'calendario.editar');
@@ -323,7 +366,7 @@
       <div class="card-body">${next.length
         ? html`<ul class="items ca-next">${next.map((e) => {
             const t = evType(e.type);
-            return html`<li><button type="button" class="ca-next-btn" data-ca-goto="${e.date}">${dateChip(e.date)}<span class="grow"><b class="ca-next-t">${e.title}</b><span class="small muted">${U.cap(U.relDay(e.date))}${e.time ? ` · ${e.time}` : ''} · ${t.label}</span></span><span class="ev-dot" style="--c:var(--cat-${t.c})" aria-hidden="true"></span></button></li>`;
+            return html`<li><button type="button" class="ca-next-btn" data-ca-goto="${e.date}">${dateChip(e.date)}<span class="grow"><b class="ca-next-t">${e.title}</b><span class="small muted">${U.cap(U.relDay(e.date))}${e.time ? ` · ${e.time}` : ''} · ${t.label}${whereBit(e)}</span></span><span class="ev-dot" style="--c:var(--cat-${t.c})" aria-hidden="true"></span></button></li>`;
           })}</ul>`
         : html`<p class="muted small">Nada marcado daqui para a frente.</p>`}</div>
     </section>`;
@@ -574,7 +617,10 @@
     size: 'third',
     render() {
       const T = today();
-      const next = Store.state.events.filter((e) => e.date >= T).sort(byWhen).slice(0, 5);
+      const mine = relevantEvents(T);
+      const next = mine.slice(0, 5);
+      // quem atua só em algumas turmas vê a escola toda e as suas; as provas das outras turmas ficam no Calendário
+      const others = Store.family ? 0 : Store.state.events.filter((e) => e.date >= T).length - mine.length;
       // feriado nacional nos próximos 14 dias também entra
       const hols = [];
       for (let i = 0, d = T; i < 15; i++, d = U.addDays(d, 1)) if (national(d) && !Store.state.events.some((e) => e.date === d && e.type === 'feriado')) hols.push({ id: 'hol' + d, date: d, title: national(d), type: 'feriado', time: '', hol: true });
@@ -584,9 +630,10 @@
         <div class="card-body">${list.length
           ? html`<ul class="items ca-next">${list.map((e) => {
               const t = evType(e.type);
-              return html`<li><button type="button" class="ca-next-btn" data-ca-wgo="${e.date}">${dateChip(e.date)}<span class="grow"><b class="ca-next-t">${e.title}</b><span class="small muted">${U.cap(U.relDay(e.date))}${e.time ? ` · ${e.time}` : ''} · ${e.hol ? 'Feriado nacional' : t.label}</span></span><span class="ev-dot" style="--c:var(--cat-${t.c})" aria-hidden="true"></span></button></li>`;
+              return html`<li><button type="button" class="ca-next-btn" data-ca-wgo="${e.date}">${dateChip(e.date)}<span class="grow"><b class="ca-next-t">${e.title}</b><span class="small muted">${U.cap(U.relDay(e.date))}${e.time ? ` · ${e.time}` : ''} · ${e.hol ? 'Feriado nacional' : t.label}${whereBit(e)}</span></span><span class="ev-dot" style="--c:var(--cat-${t.c})" aria-hidden="true"></span></button></li>`;
             })}</ul>`
-          : html`<p class="muted small">Nada marcado para os próximos dias.</p>`}</div>
+          : html`<p class="muted small">Nada marcado para os próximos dias${others ? ' na escola toda ou nas suas turmas' : ''}.</p>`}
+          ${others > 0 ? html`<p class="small muted ca-w-others">Mostrando a escola toda e as suas turmas. ${U.plural(others, 'evento de outra turma está', 'eventos de outras turmas estão')} no <a href="#calendario">calendário</a>.</p>` : ''}</div>
       </section>`;
     },
     mount(el) {

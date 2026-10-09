@@ -56,6 +56,8 @@
   const none = (text) => html`<p class="muted small rp-none">${text}</p>`;
   const toneFor = (rate, min) => (rate == null ? '' : rate < min ? 'bad' : rate < min + 10 ? 'warn' : 'ok');
   const gTone = (v) => (v == null ? '' : v < S().passing ? (v < S().recovery ? 'bad' : 'warn') : '');
+  /** Texto da nota coerente com a cor (5,96 aparece "5,96" em laranja, não "6,0"). */
+  const gNum = (v) => (typeof Q.gradeText === 'function' ? Q.gradeText(v) : U.num(v));
 
   // =====================================================================
   // 1. Frequência
@@ -240,8 +242,8 @@
     const one = st.classId ? d.perClass[0] : null;
     if (!d.students.length) return { filters, body: UI.empty({ icon: 'grade', title: 'Nenhum aluno nesta seleção', text: 'Escolha outra turma.' }) };
     const fmt1 = (v) => U.num(v, 1);
-    const chartHTML = chart('perf', d.subjects.filter((x) => x.avg != null).map((x) => ({ label: x.sub.short || x.sub.name, short: (x.sub.short || x.sub.name).slice(0, 5), value: x.avg, tip: `${x.sub.name}: média ${U.num(x.avg)} · ${x.below} abaixo de ${U.num(d.passing)}` })), { fmt: fmt1, title: `Média por disciplina · ${termName(st.term)}` });
-    const cell = (v) => (v == null ? html`<span class="muted">—</span>` : html`<b class="rp-g ${gTone(v) ? 'rp-t-' + gTone(v) : ''}">${U.num(v)}</b>`);
+    const chartHTML = chart('perf', d.subjects.filter((x) => x.avg != null).map((x) => ({ label: x.sub.short || x.sub.name, short: (x.sub.short || x.sub.name).slice(0, 5), value: x.avg, tip: `${x.sub.name}: média ${gNum(x.avg)} · ${x.below} abaixo de ${U.num(d.passing)}` })), { fmt: fmt1, title: `Média por disciplina · ${termName(st.term)}` });
+    const cell = (v) => (v == null ? html`<span class="muted">—</span>` : html`<b class="rp-g ${gTone(v) ? 'rp-t-' + gTone(v) : ''}">${gNum(v)}</b>`);
     let mainTable;
     if (one) {
       mainTable = section(
@@ -264,11 +266,11 @@
     const below = d.below.slice().sort((a, b) => b.below.length - a.below.length || (a.avg ?? 10) - (b.avg ?? 10));
     const belowTable = below.length
       ? html`<div class="table-wrap"><table class="table responsive rp-table"><thead><tr><th>Aluno</th>${one ? '' : html`<th>Turma</th>`}<th>Disciplinas abaixo da média</th><th class="num">Média geral</th></tr></thead><tbody>${below.map(
-          (x) => html`<tr><td class="first">${studentLink(x.s)}</td>${one ? '' : html`<td class="nowrap" data-l="Turma">${x.c.name}</td>`}<td data-l="Abaixo em"><span class="rp-chips">${x.below.map((b) => html`<span class="rp-gchip ${'rp-t-' + (gTone(b.v) || 'warn')}">${b.sub.short || b.sub.name} ${U.num(b.v)}</span>`)}</span></td><td class="num" data-l="Média geral">${cell(x.avg)}</td></tr>`,
+          (x) => html`<tr><td class="first">${studentLink(x.s)}</td>${one ? '' : html`<td class="nowrap" data-l="Turma">${x.c.name}</td>`}<td data-l="Abaixo em"><span class="rp-chips">${x.below.map((b) => html`<span class="rp-gchip ${'rp-t-' + (gTone(b.v) || 'warn')}">${b.sub.short || b.sub.name} ${gNum(b.v)}</span>`)}</span></td><td class="num" data-l="Média geral">${cell(x.avg)}</td></tr>`,
         )}</tbody></table></div>`
       : html`<div class="rp-ok">${icon('checkCircle')}<span>Nenhum aluno abaixo da média em ${termName(st.term)}.</span></div>`;
     const body = html`<div class="kpis rp-kpis">
-        ${kpi('Média geral', d.avg == null ? '—' : U.num(d.avg), `aprovação com ${U.num(d.passing)}`, gTone(d.avg))}
+        ${kpi('Média geral', d.avg == null ? '—' : gNum(d.avg), `aprovação com ${U.num(d.passing)}`, gTone(d.avg))}
         ${kpi('Abaixo da média', html`${U.int(d.below.length)}<small> de ${U.int(d.students.length)}</small>`, 'alunos em ao menos uma disciplina', d.below.length ? 'warn' : 'ok')}
         ${kpi('Abaixo da recuperação', U.int(d.critical.length), `média geral menor que ${U.num(d.recovery)}`, d.critical.length ? 'bad' : '')}
         ${kpi('Notas lançadas', pct(d.filled), st.term === 'ano' ? `até o ${Q.termLabel(Q.currentTerm())}` : Q.termLabel(Number(st.term)))}
@@ -282,7 +284,7 @@
       const rows = [['Aluno', 'Matrícula', 'Turma', ...subs.map((s) => s.name), 'Média geral', 'Disciplinas abaixo da média']];
       for (const x of d.students) {
         const m = new Map(x.per.map((p) => [p.sub.id, p.v]));
-        rows.push([x.s.name, x.s.enrollment || '', x.c.name, ...subs.map((s) => (m.get(s.id) == null ? '' : U.num(m.get(s.id), 1))), x.avg == null ? '' : U.num(x.avg, 1), x.below.map((b) => b.sub.name).join(', ')]);
+        rows.push([x.s.name, x.s.enrollment || '', x.c.name, ...subs.map((s) => (m.get(s.id) == null ? '' : gNum(m.get(s.id)))), x.avg == null ? '' : gNum(x.avg), x.below.map((b) => b.sub.name).join(', ')]);
       }
       return { rows, name: `desempenho-${st.classId ? U.slug(className(st.classId)) + '-' : ''}${st.term === 'ano' ? 'ano' : 'etapa-' + st.term}` };
     };

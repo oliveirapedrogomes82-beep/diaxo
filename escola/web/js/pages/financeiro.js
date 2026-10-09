@@ -204,7 +204,7 @@
       <td class="num" data-l="Vence">${U.fmtDate(i.due)}${days ? html`<span class="fi-late">${U.plural(days, 'dia', 'dias')} de atraso</span>` : ''}</td>
       <td class="num" data-l="Valor"><b>${U.money(st === 'pago' ? paidValue(i) : due)}</b>${st === 'atrasado' && due !== i.amount ? html`<span class="person-sub">${U.money(i.amount)} + encargos</span>` : st === 'pago' && paidValue(i) !== i.amount ? html`<span class="person-sub">cobrado ${U.money(i.amount)}</span>` : ''}</td>
       <td data-l="Situação">${statusPill(i)}${i.paidAt ? html`<span class="person-sub">${U.fmtDate(i.paidAt)}${i.method ? ` · ${i.method}` : ''}</span>` : reversed ? html`<span class="person-sub" title="${i.reversals[reversed - 1].reason}">estorno em ${U.fmtDate(i.reversals[reversed - 1].at)}</span>` : ''}</td>
-      <td class="end fi-acts">${!i.paidAt && canReceive() ? html`<button type="button" class="btn sm primary" data-fi-pay="${i.id}">${icon('cash')}<span>Receber</span></button>` : ''}${i.paidAt ? html`<button type="button" class="btn sm" data-fi-receipt="${i.id}">${icon('printer')}<span>Recibo</span></button>` : ''}<button type="button" class="icon-btn sm" data-fi-menu="${i.id}" aria-label="Mais opções: ${invTitle(i)}${s ? ` de ${s.name}` : ''}" title="Mais opções">${icon('dots')}</button></td>
+      <td class="end fi-acts">${!i.paidAt && canReceive() ? html`<button type="button" class="btn sm ${st === 'atrasado' ? 'fi-pay-late' : ''}" data-fi-pay="${i.id}">${icon('cash')}<span>Receber</span></button>` : ''}${i.paidAt ? html`<button type="button" class="btn sm" data-fi-receipt="${i.id}">${icon('printer')}<span>Recibo</span></button>` : ''}<button type="button" class="icon-btn sm" data-fi-menu="${i.id}" aria-label="Mais opções: ${invTitle(i)}${s ? ` de ${s.name}` : ''}" title="Mais opções">${icon('dots')}</button></td>
     </tr>`;
   };
   const table = (list, opts = {}) =>
@@ -568,7 +568,7 @@
       <header class="fi-rc-head"><div><b class="fi-rc-school">${st.schoolName || 'Escola'}</b><div class="small">${[st.cnpj ? `CNPJ ${st.cnpj}` : '', st.address, st.phone].filter(Boolean).join(' · ')}</div></div>
         <div class="fi-rc-no"><span>Recibo</span><b>${i.id.toUpperCase()}</b></div></header>
       <div class="fi-rc-value"><span>Valor recebido</span><b>${U.money(value)}</b></div>
-      <p class="fi-rc-text">Recebemos de <b>${g ? g.name : 'responsável financeiro'}</b>${g && g.cpf ? `, CPF ${g.cpf}` : ''}, a importância de <b>${U.money(value)}</b> (${extenso(value)}), referente a <b>${invTitle(i)}</b>${i.kind === 'mensalidade' ? ` de ${i.month.slice(0, 4)}` : ''} do(a) aluno(a) <b>${s ? s.name : ''}</b>${s && Q.klass(s.classId) ? `, turma ${Q.klass(s.classId).name}` : ''}, e damos quitação desse valor.</p>
+      <p class="fi-rc-text">Recebemos de <b>${g ? g.name : 'responsável financeiro'}</b>${g && g.cpf ? `, CPF ${g.cpf}` : ''}, a importância de <b>${U.money(value)}</b> (${extenso(value)}), referente a <b>${invTitle(i)}</b>${i.kind === 'mensalidade' ? ` de ${i.month.slice(0, 4)}` : ''} ${typeof Q.byGender === 'function' ? Q.byGender(s, 'do aluno', 'da aluna', 'do(a) aluno(a)') : 'do(a) aluno(a)'} <b>${s ? s.name : ''}</b>${s && Q.klass(s.classId) ? `, turma ${Q.klass(s.classId).name}` : ''}, e damos quitação desse valor.</p>
       <dl class="fi-rc-kv">
         <dt>Vencimento</dt><dd>${U.fmtDate(i.due)}</dd>
         <dt>Pagamento</dt><dd>${U.fmtDate(i.paidAt)}</dd>
@@ -690,7 +690,7 @@
             ${UI.seg([['todas', `Todas (${counts.todas})`], ['atrasado', `Atrasadas (${counts.atrasado})`], ['aberto', `A vencer (${counts.aberto})`], ['pago', `Pagas (${counts.pago})`]], st.status, 'data-fi-status')}
             <span class="grow"></span>
             ${classes.length > 1 ? html`<select class="input fi-filter" data-fi-class aria-label="Filtrar por turma"><option value="">Todas as turmas</option>${classes.map((c) => html`<option value="${c.id}" ${c.id === st.classId ? raw('selected') : ''}>${c.name}</option>`)}</select>` : ''}
-            <label class="search-box fi-search"><span class="sr-only">Buscar aluno, responsável ou descrição</span>${icon('search')}<input class="input" type="search" data-fi-q value="${st.q}" placeholder="Aluno, responsável ou descrição" autocomplete="off"></label>
+            <label class="search-box fi-search"><span class="sr-only">Buscar aluno, responsável ou descrição</span>${icon('search')}<input class="input" type="search" data-fi-q value="${st.q}" placeholder="Buscar aluno ou responsável" autocomplete="off"></label>
             ${U.inFrame ? '' : html`<button type="button" class="btn" data-fi-export title="Baixar a lista filtrada (.csv)">${icon('download')}<span class="hide-xs">Planilha</span></button>`}
           </div>`
         : ''}
@@ -738,7 +738,7 @@
               <td class="num" data-l="Total"><b class="fi-bad">${U.money(d.total)}</b></td>
               <td class="end fi-acts">
                 ${g && g.phone ? html`<a class="btn sm" href="${U.whatsappLink(g.phone, msg)}" target="_blank" rel="noopener noreferrer" aria-label="Lembrar ${g.name} pelo WhatsApp">${icon('message')}<span>WhatsApp</span></a>` : ''}
-                ${canReceive() ? html`<button type="button" class="btn sm primary" data-fi-recv="${s.id}">${icon('cash')}<span>Receber</span></button>` : ''}
+                ${canReceive() ? html`<button type="button" class="btn sm fi-pay-late" data-fi-recv="${s.id}">${icon('cash')}<span>Receber</span></button>` : ''}
                 <button type="button" class="icon-btn sm" data-fi-dmenu="${s.id}" aria-label="Mais opções: ${s.name}" title="Mais opções">${icon('dots')}</button>
               </td>
             </tr>`;
@@ -971,6 +971,13 @@
     const totalOpen = round2(U.sum(open.map((i) => Q.amountDue(i, T))));
     const next = open.filter((i) => i.due >= T).sort((a, b) => a.due.localeCompare(b.due))[0];
     const names = kids.map((k) => U.firstName(k.name));
+    // tudo o que vence no próximo dia de vencimento (os filhos costumam vencer juntos), com os nomes quando há mais de um filho
+    let nextLine = '';
+    if (next) {
+      const sameDay = open.filter((i) => i.due === next.due);
+      const who = kids.filter((k) => sameDay.some((i) => i.studentId === k.id)).map((k) => U.firstName(k.name));
+      nextLine = ` Próximo vencimento: ${U.money(round2(U.sum(sameDay.map((i) => Q.amountDue(i, T)))))} em ${U.fmtDate(next.due)} (${U.relDay(next.due)})${kids.length > 1 && who.length ? `, de ${joinPt(who)}` : ''}.`;
+    }
     const msg = typeof Actions.novaMensagem === 'function';
     return html`
       <div class="page-head"><div><h1>Mensalidades</h1><p class="lead">Valores, vencimentos e recibos${names.length ? ` de ${joinPt(names)}` : ''}. O pagamento aparece aqui assim que a escola dá baixa.</p></div></div>
@@ -979,7 +986,7 @@
             <div class="fi-due-main">
               <span class="kpi-label">${icon(late.length ? 'alert' : 'wallet')}${late.length ? 'Em aberto (com atraso)' : 'Em aberto'}</span>
               <b class="fi-due-v ${late.length ? 'fi-bad' : ''}">${U.money(totalOpen)}</b>
-              <span class="small muted">${late.length ? `${U.plural(late.length, 'cobrança atrasada', 'cobranças atrasadas')}, com multa e juros até hoje.` : ''}${next ? ` Próximo vencimento: ${U.fmtDate(next.due)} (${U.money(next.amount)}).` : ''}</span>
+              <span class="small muted">${late.length ? `${U.plural(late.length, 'cobrança atrasada', 'cobranças atrasadas')}, com multa e juros até hoje.` : ''}${nextLine}</span>
             </div>
             <div class="fi-pix">
               ${s.pixKey
@@ -1005,7 +1012,7 @@
           </div>
         </section>`;
       })}
-      <p class="small muted fi-fam-foot">${icon('info')} Mensalidade com vencimento no dia ${s.dueDay || 10}.${Number(s.lateFine) || Number(s.lateInterest) ? ` Depois do vencimento: multa de ${U.num(Number(s.lateFine) || 0, 0)}% e juros de ${U.num(Number(s.lateInterest) || 0, 0)}% ao mês.` : ''} Dúvidas: fale com a secretaria${s.phone ? ` (${s.phone})` : ''}.</p>`;
+      <p class="small muted fi-fam-foot">${icon('info')}<span>Mensalidade com vencimento no dia ${s.dueDay || 10}.${Number(s.lateFine) || Number(s.lateInterest) ? ` Depois do vencimento: multa de ${U.num(Number(s.lateFine) || 0, 0)}% e juros de ${U.num(Number(s.lateInterest) || 0, 0)}% ao mês.` : ''} Dúvidas: fale com a secretaria${s.phone ? html` pelo <a href="tel:${U.digits(s.phone)}">${s.phone}</a>` : ''}.</span></p>`;
   };
   const mountFamily = (el) => {
     el.addEventListener('click', (e) => {
@@ -1164,6 +1171,8 @@
     size: 'half',
     perm: 'financeiro.ver',
     when: () => Q.chargesFees(),
+    // para a tesouraria (quem cuida do financeiro e não da secretaria nem da sala de aula) é o quadro principal
+    primary: () => Store.canAny('financeiro.receber', 'financeiro.gerenciar') && !Store.canAny('chamada.registrar', 'turmas.gerenciar', 'alunos.cadastrar', 'mensagens.responder'),
     render() {
       const T = today();
       const m = T.slice(0, 7);

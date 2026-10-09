@@ -40,11 +40,17 @@
 }
 .at-row:hover { background: var(--surface-2); }
 .at-row-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
-.at-row-top { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-row-top { overflow-wrap: anywhere; }
 .at-row-top b { font-weight: 600; }
-.at-row-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .85rem; color: var(--fg-2); min-width: 0; }
+/* turma · tipo · área · autor: quebram linha entre si e o separador "·" nunca começa uma linha
+   (o da primeira peça de cada linha cai na margem negativa, escondida pelo overflow) */
+.at-row-meta { display: block; overflow: hidden; font-size: .85rem; color: var(--fg-2); min-width: 0; }
+.at-row-bits { display: flex; align-items: center; flex-wrap: wrap; row-gap: 2px; margin-left: -15px; }
+.at-row-bits > span { position: relative; padding-left: 15px; min-width: 0; overflow-wrap: anywhere; }
+.at-row-bits > span::before { content: "·"; position: absolute; left: 5px; color: var(--fg-3); }
+.at-row-class { color: var(--fg-2); }
 .at-row-go { width: 18px; height: 18px; }
-.at-row-type { display: inline-flex; align-items: center; gap: 6px; }
+.at-row-bits > .at-row-type { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- gaveta de leitura ---------- */
 .at-drawer .kv { margin-bottom: 14px; }
@@ -151,8 +157,6 @@
   .at-row-main { flex: 1 1 calc(100% - 70px); }
   .at-row > .at-conf { margin-left: 58px; }
   .at-row-go { display: none; }
-  .at-row-by { flex-basis: 100%; }
-  .at-sep { display: none; }
   .at-plan-ic { display: none; }
   .at-plan-head, .at-plan-body { padding-left: 14px; padding-right: 14px; }
   .at-plan-foot { padding-left: 14px; padding-right: 14px; }

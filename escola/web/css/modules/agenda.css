@@ -94,6 +94,19 @@
 .ag-wday-h { display: flex; align-items: center; gap: 12px; }
 .ag-wday-h .grow { flex: 1; min-width: 0; }
 .ag-wday:not(:has(.ag-list)) .ag-wday-h { opacity: .78; }
+/* dias que já passaram na semana atual: recolhidos numa linha */
+.ag-wpast > summary { list-style: none; cursor: pointer; padding: 6px 8px; margin: -6px -8px; border-radius: var(--radius); }
+.ag-wpast > summary::-webkit-details-marker { display: none; }
+.ag-wpast > summary:hover { background: var(--surface-2); }
+.ag-wpast > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ag-wpast:not([open]) .ag-wday-h { opacity: .86; }
+.ag-wpast:not([open]) + .ag-wpast { margin-top: -12px; } /* dias recolhidos seguidos ficam juntos */
+.ag-wpast-more { display: inline-flex; align-items: center; gap: 4px; font-size: .84rem; font-weight: 600; color: var(--accent-text); }
+.ag-wpast-more .i { width: 16px; height: 16px; transition: transform .15s; }
+.ag-wpast[open] .ag-wpast-more .i { transform: rotate(180deg); }
+.ag-wpast .ag-wpast-c, .ag-wpast[open] .ag-wpast-o { display: none; }
+.ag-wpast[open] .ag-wpast-c { display: inline; }
+.ag-card.ag-flash { outline: 2px solid var(--primary); outline-offset: 2px; transition: outline-color .4s; }
 .ag-weekempty { text-align: center; padding: 6px 0; }
 .ag-allnote .btn { margin-left: auto; }
 .ag-hist { background: var(--surface-2); border-color: var(--line); }
@@ -286,6 +299,21 @@ a.ag-w-t:hover { color: var(--accent-text); text-decoration: underline; }
 .ro-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; }
 .ro-status .grow { flex: 1; min-width: 200px; }
 .ro-status .meter { max-width: 240px; }
+.ro-missing, .ro-complete { display: inline-flex; align-items: flex-start; gap: 6px; color: var(--fg-2); max-width: 100%; }
+.ro-missing .i, .ro-complete .i { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.ro-missing .i { color: var(--warn); }
+.ro-complete .i { color: var(--ok); }
+/* cartão do painel "Rotina de hoje" */
+.ro-widget .card-head h2 { display: flex; align-items: center; gap: 8px; }
+.ro-widget .card-head h2 .i { color: var(--fg-3); }
+.ro-w-list > li { gap: 10px; }
+.ro-w-ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--warn-soft); color: var(--warn); }
+.ro-w-ic .i { width: 17px; height: 17px; }
+.ro-w-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ro-w-sub { white-space: normal; }
+.ro-w-dirty { color: var(--warn); font-weight: 600; }
+.ro-w-msg { display: flex; gap: 10px; align-items: center; color: var(--fg-2); font-size: .92rem; }
+.ro-w-msg .i { color: var(--fg-3); width: 20px; height: 20px; }
 .ro-mode { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .ro-fields { display: flex; flex-wrap: wrap; gap: 6px; }
 .ro-fields .chip { flex: none; }

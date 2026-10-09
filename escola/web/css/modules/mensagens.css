@@ -175,13 +175,20 @@
 .mg-w-empty .i { color: var(--ok); margin-top: 2px; }
 .mg-w-btns { margin-top: 12px; }
 .mg-w-exits { margin-bottom: 12px; padding: 10px 12px; border-radius: var(--radius); background: color-mix(in srgb, var(--mark) 22%, var(--surface)); }
-.mg-w-exits b { display: flex; align-items: center; gap: 6px; }
-.mg-w-exits ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.mg-w-exits > b { display: flex; align-items: center; gap: 6px; }
+.mg-w-exits ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+.mg-w-exits li + li { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--mark) 40%, var(--line)); }
 .mg-w-exits a { display: flex; gap: 10px; align-items: baseline; color: inherit; text-decoration: none; font-size: .88rem; min-width: 0; }
-.mg-w-exits a:hover .grow { text-decoration: underline; }
-.mg-w-exits .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mg-w-exits .num { font-weight: 700; width: 46px; flex: none; }
-.mg-w-exits .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.mg-w-exits a:hover .mg-w-kid { text-decoration: underline; }
+/* horário (saída antecipada) ou "Busca" (outra pessoa, no horário normal) */
+.mg-w-when { width: 48px; flex: none; font-weight: 700; }
+.mg-w-when.is-kind { font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-2); }
+/* nome do aluno e de quem busca sempre inteiros: quebram linha em vez de cortar (é o que a portaria lê) */
+.mg-w-exit { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.mg-w-kid { font-weight: 600; overflow-wrap: anywhere; }
+.mg-w-kid .muted { font-weight: 400; }
+.mg-w-who { overflow-wrap: anywhere; }
+.mg-w-who b { font-weight: 600; }
 
 /* ---------- responsivo ---------- */
 @media (max-width: 1100px) {

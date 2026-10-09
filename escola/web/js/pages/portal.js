@@ -26,7 +26,9 @@
   const classOf = (s) => (s ? Q.klass(s.classId) : null);
   const classLine = (c) => (c ? [c.name, c.segment, c.shift].filter(Boolean).join(' · ') : 'Sem turma no momento');
   const isInfant = (c) => !!c && c.segment === 'Educação Infantil';
-  const homeroomTitle = (c) => (c && ['Educação Infantil', 'Fundamental I'].includes(c.segment) ? 'Regente' : 'Conselheiro(a)');
+  const byGender = (p, masc, fem, neutral) => (typeof Q.byGender === 'function' ? Q.byGender(p, masc, fem, neutral) : neutral);
+  /** "Regente" (Infantil e Fund. I) ou "Conselheira"/"Conselheiro" pelo título da pessoa; sem dado, "Responsável pela turma". */
+  const homeroomTitle = (c, teacher) => (c && ['Educação Infantil', 'Fundamental I'].includes(c.segment) ? 'Regente' : byGender(teacher, 'Conselheiro', 'Conselheira', 'Responsável pela turma'));
   const subjectName = (id) => (Q.subject(id) || {}).name || '';
   const listText = (arr) => (arr.length > 1 ? `${arr.slice(0, -1).join(', ')} e ${arr[arr.length - 1]}` : arr[0] || '');
   const typeInfo = (t) => Q.DIARY_TYPES[t] || { label: 'Item', icon: 'bookOpen', tone: 'c1' };
@@ -155,7 +157,9 @@
     const st = Q.settings();
     return v < st.passing ? (v < st.recovery ? 'pt-g-bad' : 'pt-g-warn') : '';
   };
-  const fmtG = (v) => (v == null ? '' : U.num(v));
+  /** Texto da nota coerente com a cor: uma casa, ou duas quando o arredondamento cruzaria a média (ver Q.gradeText). */
+  const gNum = (v) => (typeof Q.gradeText === 'function' ? Q.gradeText(v) : U.num(v));
+  const fmtG = (v) => (v == null ? '' : gNum(v));
   const releasedTerms = () => Q.terms().filter((t) => Q.termReleased(t));
 
   // ---------- financeiro ----------
@@ -288,7 +292,7 @@
         <div class="grow">
           <h2 id="pt-kid-${s.id}"><a href="#filhos/${s.id}">${first}</a></h2>
           <p class="small muted">${classLine(c)}</p>
-          ${teacher ? html`<p class="small pt-kid-teacher">${homeroomTitle(c)}: <b>${U.shortName(teacher.name)}</b></p>` : ''}
+          ${teacher ? html`<p class="small pt-kid-teacher">${homeroomTitle(c, teacher)}: <b>${U.shortName(teacher.name)}</b></p>` : ''}
         </div>
         <a class="icon-btn pt-kid-go" href="#filhos/${s.id}" aria-label="Dados de ${first}">${icon('chevronRight')}</a>
       </header>
@@ -427,12 +431,15 @@
       ? html`<nav class="seg pt-switch no-print" aria-label="Escolha o filho">${list.map((k) => html`<a href="#${base}/${k.id}" ${k.id === s.id ? raw('aria-current="page"') : ''}>${UI.avatar(k.name, 'sm', k.photo)}${U.firstName(k.name)}</a>`)}</nav>`
       : '';
 
+  /** Resultado do conselho, concordando com o aluno (sexo informado na ficha). */
   const COUNCIL = {
-    aprovado: { label: 'Aprovado(a)', tone: 'ok' },
-    recuperacao: { label: 'Em recuperação', tone: 'warn' },
-    retido: { label: 'Retido(a)', tone: 'bad' },
-    transferido: { label: 'Transferido(a)', tone: '' },
+    aprovado: { label: (s) => byGender(s, 'Aprovado', 'Aprovada', 'Aprovado(a)'), tone: 'ok' },
+    recuperacao: { label: () => 'Em recuperação', tone: 'warn' },
+    retido: { label: (s) => byGender(s, 'Retido', 'Retida', 'Retido(a)'), tone: 'bad' },
+    transferido: { label: (s) => byGender(s, 'Transferido', 'Transferida', 'Transferido(a)'), tone: '' },
   };
+  /** Situação na disciplina (Core.rules) com a concordância do aluno. */
+  const sitLabel = (sit, s) => (sit.label === 'Aprovado(a)' ? byGender(s, 'Aprovado', 'Aprovada', sit.label) : sit.label === 'Reprovado(a)' ? byGender(s, 'Reprovado', 'Reprovada', sit.label) : sit.label);
 
   const termStatusNotice = (terms) => {
     const st = Q.settings();
@@ -534,7 +541,7 @@
     const sett = Q.settings();
     const sigs = html`<div class="print-only"><div class="signatures"><div>Direção / Secretaria</div><div>Responsável</div></div></div>`;
     const coBlock = co && COUNCIL[co.result]
-      ? html`<section class="card card-pad pt-council"><div class="pt-council-h">${icon('users')}<div class="grow"><span class="small muted">Conselho de classe de ${Q.year()}</span><b>${COUNCIL[co.result].label}</b></div>${UI.pill(COUNCIL[co.result].label, COUNCIL[co.result].tone)}</div>${co.note ? html`<p class="pt-council-note">${co.note}</p>` : ''}</section>`
+      ? html`<section class="card card-pad pt-council"><div class="pt-council-h">${icon('users')}<div class="grow"><span class="small muted">Conselho de classe de ${Q.year()}</span><b>${COUNCIL[co.result].label(s)}</b></div>${UI.pill(COUNCIL[co.result].label(s), COUNCIL[co.result].tone)}</div>${co.note ? html`<p class="pt-council-note">${co.note}</p>` : ''}</section>`
       : '';
     const kpis = [];
     kpis.push(html`<div class="card kpi"><span class="kpi-label">${icon('checkSquare')}Frequência no ano</span><span class="kpi-value num pt-t-${tone}">${U.pct(rate)}</span>${rate != null ? UI.meter(rate, tone) : ''}<span class="kpi-foot">mínimo ${Q.minAttendance(c.id)}%</span></div>`);
@@ -542,7 +549,7 @@
     if (!parecer) {
       const avgs = Q.classSubjects(c.id).map((x) => Q.subjectAverage(s.id, x.id)).filter((v) => v != null);
       const avg = U.avg(avgs);
-      kpis.push(html`<div class="card kpi"><span class="kpi-label">${icon('grade')}Média geral${rel.length < terms.length ? ' (parcial)' : ''}</span><span class="kpi-value num ${gTone(avg)}">${avg != null ? U.num(avg) : '—'}</span><span class="kpi-foot">aprovação com ${U.num(sett.passing)}</span></div>`);
+      kpis.push(html`<div class="card kpi"><span class="kpi-label">${icon('grade')}Média geral${rel.length < terms.length ? ' (parcial)' : ''}</span><span class="kpi-value num ${gTone(avg)}">${avg != null ? gNum(avg) : '—'}</span><span class="kpi-foot">aprovação com ${U.num(sett.passing)}</span></div>`);
     }
     kpis.push(html`<div class="card kpi"><span class="kpi-label">${icon('layers')}Etapas liberadas</span><span class="kpi-value num">${rel.length}<small>/${terms.length}</small></span><span class="kpi-foot">${rel.length === terms.length ? 'boletim completo' : `${Q.termLabel(Q.currentTerm())} em andamento`}</span></div>`);
 
@@ -580,27 +587,40 @@
       const complete = cells.every((cl) => !cl.locked && cl.tg != null);
       return { x, cells, avg, rf, fin, sit: Q.situation(fin, complete) };
     });
+    const termWord = sett.termLabel || 'bimestre';
+    /** Frases da recuperação de uma disciplina, por extenso (no celular não há tooltip). */
+    const recLines = (cells) => {
+      const list = cells.filter((cl) => !cl.locked && cl.rec != null);
+      if (!list.length) return '';
+      return html`<ul class="pt-bl-recs small muted">${list.map((cl) => {
+        const t = U.cap(Q.termLabel(cl.t));
+        if (cl.g == null) return html`<li>${t}: nota da recuperação <b>${fmtG(cl.rec)}</b>.</li>`;
+        if (cl.rec > cl.g) return html`<li>${t}: de ${fmtG(cl.g)} para <b>${fmtG(cl.tg)}</b> com a recuperação.</li>`;
+        return html`<li>${t}: fez recuperação (${fmtG(cl.rec)}), mas vale a nota do ${termWord}, <b>${fmtG(cl.tg)}</b>.</li>`;
+      })}</ul>`;
+    };
     const termTh = (t) => html`<th class="center">${Q.termLabel(t, { short: true })}${Q.termReleased(t) ? '' : html`<span class="pt-lock" title="Ainda não liberado">${icon('lock')}${srOnly('ainda não liberado')}</span>`}</th>`;
     const cellTd = (cl) =>
       cl.locked
         ? html`<td class="center pt-locked"><span class="muted" title="Ainda não liberado">—</span></td>`
-        : html`<td class="center num ${gTone(cl.tg)}">${cl.tg != null ? U.num(cl.tg) : html`<span class="muted">—</span>`}${cl.rec != null ? html`<span class="pt-rec" title="Nota da etapa ${fmtG(cl.g) || '—'}; nota da recuperação ${fmtG(cl.rec)}. Vale a maior.">nota ${fmtG(cl.g) || '—'} · rec. ${fmtG(cl.rec)}</span>` : ''}</td>`;
+        : html`<td class="center num ${gTone(cl.tg)}">${cl.tg != null ? gNum(cl.tg) : html`<span class="muted">—</span>`}${cl.rec != null ? html`<span class="pt-rec">no ${termWord} ${fmtG(cl.g) || '—'}</span><span class="pt-rec">recuperação ${fmtG(cl.rec)}</span>` : ''}</td>`;
     const table = html`<section class="card pt-bol-card"><div class="table-wrap"><table class="table pt-bol">
       <caption class="sr-only">Notas de ${s.name} por disciplina e etapa</caption>
-      <thead><tr><th>Disciplina</th>${terms.map(termTh)}<th class="center">Média${rel.length < terms.length ? html`<span class="pt-th-sub">parcial</span>` : ''}</th>${anyRf ? html`<th class="center">Rec. final</th>` : ''}<th>Situação</th></tr></thead>
+      <thead><tr><th>Disciplina</th>${terms.map(termTh)}<th class="center">Média${rel.length < terms.length ? html`<span class="pt-th-sub">parcial</span>` : ''}</th>${anyRf ? html`<th class="center">Recuperação final</th>` : ''}<th>Situação</th></tr></thead>
       <tbody>${rows.map(
         (r) => html`<tr><td><span class="subject-tag"><span class="swatch c${r.x.color || 1}"></span>${r.x.name}</span></td>${r.cells.map(cellTd)}
-          <td class="center num"><b class="${gTone(r.avg)}">${r.avg != null ? U.num(r.avg) : html`<span class="muted">—</span>`}</b></td>
-          ${anyRf ? html`<td class="center num ${gTone(r.rf)}">${r.rf != null ? U.num(r.rf) : html`<span class="muted">—</span>`}</td>` : ''}
-          <td>${r.sit.tone ? UI.pill(r.sit.label, r.sit.tone) : html`<span class="small muted">${r.sit.label}</span>`}</td></tr>`,
+          <td class="center num"><b class="${gTone(r.avg)}">${r.avg != null ? gNum(r.avg) : html`<span class="muted">—</span>`}</b></td>
+          ${anyRf ? html`<td class="center num ${gTone(r.rf)}">${r.rf != null ? gNum(r.rf) : html`<span class="muted">—</span>`}</td>` : ''}
+          <td>${r.sit.tone ? UI.pill(sitLabel(r.sit, s), r.sit.tone) : html`<span class="small muted">${r.sit.label}</span>`}</td></tr>`,
       )}</tbody></table></div></section>`;
     const cards = html`<ul class="pt-bl no-print" aria-label="Notas por disciplina">${rows.map(
       (r) => html`<li class="card">
-        <div class="pt-bl-h"><span class="swatch c${r.x.color || 1}" aria-hidden="true"></span><b class="grow">${r.x.name}</b><span class="pt-bl-avg"><span class="small muted">média</span> <b class="num ${gTone(r.avg)}">${r.avg != null ? U.num(r.avg) : '—'}</b></span></div>
+        <div class="pt-bl-h"><span class="swatch c${r.x.color || 1}" aria-hidden="true"></span><b class="grow">${r.x.name}</b><span class="pt-bl-avg"><span class="small muted">média</span> <b class="num ${gTone(r.avg)}">${r.avg != null ? gNum(r.avg) : '—'}</b></span></div>
         <div class="pt-bl-terms">${r.cells.map(
-          (cl) => html`<span class="pt-bl-t ${cl.locked ? 'is-locked' : ''}"><span class="pt-bl-tl">${Q.termLabel(cl.t, { short: true })}</span>${cl.locked ? html`${icon('lock')}<span class="sr-only">ainda não liberado</span>` : html`<b class="num ${gTone(cl.tg)}">${cl.tg != null ? U.num(cl.tg) : '—'}</b>${cl.rec != null && cl.rec > (cl.g ?? -1) ? html`<span class="pt-rec" title="Nota da etapa ${fmtG(cl.g) || '—'}; recuperação ${fmtG(cl.rec)}">na rec.</span>` : ''}`}</span>`,
+          (cl) => html`<span class="pt-bl-t ${cl.locked ? 'is-locked' : ''}"><span class="pt-bl-tl">${Q.termLabel(cl.t, { short: true })}</span>${cl.locked ? html`${icon('lock')}<span class="sr-only">ainda não liberado</span>` : html`<b class="num ${gTone(cl.tg)}">${cl.tg != null ? gNum(cl.tg) : '—'}</b>${cl.rec != null && cl.rec > (cl.g ?? -1) ? html`<span class="pt-rec">recuperação</span>` : ''}`}</span>`,
         )}</div>
-        <div class="pt-bl-f">${r.sit.tone ? UI.pill(r.sit.label, r.sit.tone) : html`<span class="small muted">${r.sit.label}</span>`}${r.rf != null ? html`<span class="small muted">Rec. final: <b class="${gTone(r.rf)}">${U.num(r.rf)}</b></span>` : ''}</div>
+        ${recLines(r.cells)}
+        <div class="pt-bl-f">${r.sit.tone ? UI.pill(sitLabel(r.sit, s), r.sit.tone) : html`<span class="small muted">${r.sit.label}</span>`}${r.rf != null ? html`<span class="small muted">Recuperação final: <b class="${gTone(r.rf)}">${gNum(r.rf)}</b></span>` : ''}</div>
       </li>`,
     )}</ul>`;
     return html`<div class="pt-boletim">${headTitle}${switcher}${lost}${printHead(s, c)}
@@ -609,7 +629,7 @@
       ${termStatusNotice(terms)}
       ${subs.length
         ? html`<div class="pt-grades"><h2 class="pt-h2">${icon('grade')}Notas por disciplina</h2>${table}${cards}
-            <p class="small muted pt-legend">Notas de 0 a 10. Aprovação com média ${U.num(sett.passing)}${sett.recovery != null ? `; abaixo de ${U.num(sett.recovery)} a situação é crítica` : ''}. Quando há recuperação (rec.), vale a maior nota da etapa.${rel.length < terms.length ? ' A média considera só as etapas já liberadas.' : ''}</p></div>`
+            <p class="small muted pt-legend">Notas de 0 a 10. Aprovação com média ${U.num(sett.passing)}${sett.recovery != null ? `; abaixo de ${U.num(sett.recovery)} a situação é crítica` : ''}. Quando há recuperação, vale a maior nota entre a do ${termWord} e a da recuperação.${rel.length < terms.length ? ' A média considera só as etapas já liberadas.' : ''}</p></div>`
         : html`<section class="card">${UI.empty({ icon: 'book', title: 'Turma sem disciplinas cadastradas', text: 'As notas aparecem quando a escola cadastrar as disciplinas da turma.' })}</section>`}
       ${coBlock}
       ${attendanceBlock(s, c, recs)}
@@ -656,7 +676,7 @@
       if (role && !e.roles.includes(role)) e.roles.push(role);
       if (subject && !e.subjects.includes(subject)) e.subjects.push(subject);
     };
-    if (c.teacherId) add(c.teacherId, homeroomTitle(c));
+    if (c.teacherId) add(c.teacherId, homeroomTitle(c, Q.user(c.teacherId)));
     (c.assistantIds || []).forEach((id) => add(id, 'Auxiliar de classe'));
     for (const x of Q.classSubjects(c.id)) {
       const uid = (c.subjects || {})[x.id];
@@ -677,7 +697,7 @@
         return html`<a class="card tile pt-kidtile" href="#filhos/${s.id}">
           <div class="tile-top">${UI.avatar(s.name, 'lg', s.photo)}<div class="grow"><h3>${s.name}</h3><p class="small muted">${classLine(c)}</p><p class="small muted">${age != null ? `${age} anos` : ''}${s.enrollment ? ` · matrícula ${s.enrollment}` : ''}</p></div>${icon('chevronRight', 'muted')}</div>
           <ul class="pt-tile-facts">
-            ${teacher ? html`<li>${icon('teacher')}<span>${homeroomTitle(c)}: <b>${U.shortName(teacher.name)}</b></span></li>` : ''}
+            ${teacher ? html`<li>${icon('teacher')}<span>${homeroomTitle(c, teacher)}: <b>${U.shortName(teacher.name)}</b></span></li>` : ''}
             <li>${icon('door')}<span>${pickers ? `${U.plural(pickers, 'pessoa pode', 'pessoas podem')} buscar` : 'Ninguém cadastrado para buscar'}</span></li>
             ${s.alerts ? html`<li class="is-bad">${icon('heart')}<span>${s.alerts}</span></li>` : ''}
           </ul>

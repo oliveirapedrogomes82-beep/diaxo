@@ -90,8 +90,10 @@
 .pd-date-nav .icon-btn[disabled] { opacity: .35; pointer-events: none; }
 .pd-strip { scrollbar-width: thin; }
 .pd-strip .chip, .pd-lesson { position: relative; } /* prende o texto de leitor de tela (.sr-only) dentro do botão */
-.pd-strip .chip .state.pd-part { border: 0; background: var(--warn-soft); color: var(--warn); font-size: .66rem; }
-.pd-strip .chip .state b { font-weight: 800; }
+/* progresso das aulas do dia (2/5): azul neutro; amarelo só quando falta aula que a própria pessoa registra */
+.pd-strip .pd-prog { font-size: .72rem; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.pd-strip .pd-prog.mine { background: var(--warn-soft); color: var(--warn); }
+.pd-strip .chip .state.pd-mine { border-color: var(--warn); }
 .pd-draft-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 2px; }
 
 .pd-lessons { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
@@ -206,6 +208,8 @@
 .pd-grades td.cur { padding-right: 17px; }
 .pd-grades thead th.cur { color: var(--fg); background: color-mix(in srgb, var(--mark) 30%, var(--surface-2)); }
 .pd-rec-mark { font-size: .62rem; font-weight: 700; color: var(--accent-text); margin-left: 1px; }
+.pd-rec-was { display: block; font-size: .7rem; font-weight: 500; color: var(--fg-3); line-height: 1.1; white-space: nowrap; }
+.pd-rec-legend .pd-rec-mark { font-size: .78rem; margin: 0 2px 0 0; }
 
 /* parecer */
 .pd-par-summary { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: .92rem; }

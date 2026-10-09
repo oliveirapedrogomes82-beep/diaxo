@@ -339,7 +339,7 @@ label.chip:has(input:focus-visible) { outline: 2px solid var(--primary); outline
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); min-width: 0; }
 .card-pad { padding: 18px 20px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 20px 0; flex-wrap: wrap; }
-.card-head h2 { font-size: 1.04rem; }
+.card-head h2 { font-size: 1.04rem; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .card-head .sub { font-size: .84rem; color: var(--fg-3); }
 .card-body { padding: 14px 20px 18px; }
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 22px; align-items: start; }
@@ -466,7 +466,7 @@ a.person-name:hover { color: var(--accent-text); text-decoration: underline; }
 
 /* vazio */
 .empty { text-align: center; padding: 40px 20px; display: grid; justify-items: center; gap: 10px; }
-.empty .i { width: 48px; height: 48px; padding: 11px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-text); }
+.empty > .i { width: 48px; height: 48px; padding: 11px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-text); }
 .empty h3 { font-size: 1.08rem; }
 .empty p { color: var(--fg-3); max-width: 44ch; }
 

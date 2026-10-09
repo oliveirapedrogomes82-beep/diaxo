@@ -71,7 +71,7 @@
       ['Tipo', typeOf(r.type).label],
       ['Área', areaLabel(r.area)],
       ['Quem pode ler', html`${confTag(r)}<span class="small muted">${confOf(r.confidentiality).text(r.area)}</span>`],
-      ['Autor(a)', html`${Q.userName(r.authorId, 'Equipe de apoio')}${r.authorId === me().id ? html` <span class="muted">(você)</span>` : ''}`],
+      ['Registrado por', html`${Q.userName(r.authorId, 'Equipe de apoio')}${r.authorId === me().id ? html` <span class="muted">(você)</span>` : ''}`],
       r.createdAt ? ['Registrado', at(r.createdAt)] : null,
     ]);
   };
@@ -431,8 +431,8 @@
     return html`<li><button type="button" class="at-row" data-at-open="${r.id}" aria-label="Abrir ${typeOf(r.type).label.toLowerCase()} de ${s ? s.name : 'aluno'} em ${U.fmtDate(r.date)} (o acesso fica registrado)">
       ${dateChip(r.date)}
       <span class="at-row-main">
-        ${showStudent ? html`<span class="at-row-top"><b>${s ? s.name : 'Aluno'}</b>${className(s) ? html`<span class="muted"> · ${className(s)}</span>` : ''}</span>` : ''}
-        <span class="at-row-meta"><span class="at-row-type">${typeIcon(r.type, 'xs')}${typeOf(r.type).label}</span><span class="at-row-by muted"><span class="at-sep" aria-hidden="true">·</span> ${areaLabel(r.area)} · por ${userShort(r.authorId)}</span></span>
+        ${showStudent ? html`<span class="at-row-top"><b>${s ? s.name : 'Aluno'}</b></span>` : ''}
+        <span class="at-row-meta"><span class="at-row-bits">${showStudent && className(s) ? html`<span class="at-row-class">${className(s)}</span>` : ''}<span class="at-row-type">${typeIcon(r.type, 'xs')}${typeOf(r.type).label}</span><span class="muted">${areaLabel(r.area)}</span><span class="muted">por ${userShort(r.authorId)}</span></span></span>
       </span>
       ${confTag(r)}
       ${icon('chevronRight', 'muted at-row-go')}
@@ -643,6 +643,8 @@
     order: 45,
     size: 'half',
     perm: 'atendimentos.registrar',
+    // para a equipe de apoio (psicologia, orientação, AEE…) é o trabalho do dia: sobe para o topo do painel
+    primary: () => !Store.canAny('chamada.registrar', 'turmas.gerenciar'),
     render() {
       const recs = records().slice(0, 5);
       const waiting = Store.state.plans.filter((p) => p.status === 'ativo' && p.sharedWith && p.sharedWith.familia && !p.familyAckAt);

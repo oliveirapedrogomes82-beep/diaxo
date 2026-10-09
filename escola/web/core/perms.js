@@ -236,7 +236,7 @@
       for (const p of state.plans || []) if (c.studentIds.has(p.studentId) && p.sharedWith && p.sharedWith.familia) staff.add(p.authorId);
       fam = [released, fin.sort().join(','), [...staff].sort().join(',')].join('/');
     }
-    return [user.status, user.validUntil || '', c.family ? 'F' : 'E', [...c.perms].join(','), c.all ? '*' : [...c.classIds].sort().join(','), reach, state.settings && state.settings.ownerId === user.id ? 'o' : '', state.settings && state.settings.chargesFees === false ? 'nf' : 'f', fam].join('#');
+    return [user.status, user.validUntil || '', c.family ? 'F' : 'E', [...c.perms].join(','), (c.all ? '*' : '') + [...c.classIds].sort().join(','), reach, state.settings && state.settings.ownerId === user.id ? 'o' : '', state.settings && state.settings.chargesFees === false ? 'nf' : 'f', fam].join('#');
   };
 
   /** O contexto alcança este aluno? */

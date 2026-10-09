@@ -9,6 +9,33 @@
   const can = (p) => Store.can(p);
   const me = () => Store.me;
 
+  /** Gênero gramatical de quem se fala, quando se sabe: aluno pelo campo "sexo" (F/M); equipe pelo título
+      ("Professora", "Diretor", "Psicóloga"…). '' quando não dá para saber. */
+  const genderOf = (p) => {
+    if (!p) return '';
+    if (p.gender === 'F' || p.gender === 'M') return p.gender;
+    const w = String(p.title || '').trim().split(/\s+/)[0].toLowerCase();
+    if (/(ora|óloga|ária|eira)$/.test(w)) return 'F';
+    if (/(or|ólogo|ário|eiro)$/.test(w)) return 'M';
+    return '';
+  };
+  /** Concordância: masculino, feminino ou a forma neutra quando não se sabe (ex.: 'Aprovado', 'Aprovada', 'Aprovado(a)'). */
+  const byGender = (p, masc, fem, neutral) => {
+    const g = genderOf(p);
+    return g === 'F' ? fem : g === 'M' ? masc : neutral;
+  };
+  /** Nota com uma casa, como no boletim. Se o arredondamento cruzaria a média de aprovação ou a nota de recuperação
+      (5,96 viraria "6,0" e pareceria na média, embora a regra da escola compare o valor exato), mostra duas casas
+      sem arredondar para cima ("5,96"): número e cor contam a mesma história. */
+  const gradeText = (v) => {
+    if (v == null || isNaN(v)) return '—';
+    const st = Q.settings();
+    const shown = Number(Number(v).toFixed(1));
+    const crosses = [Number(st.passing), Number(st.recovery)].some((t) => !isNaN(t) && v < t && shown >= t);
+    return crosses ? U.num(Math.floor(Number(Number(v).toFixed(6)) * 100 + 1e-6) / 100, 2) : U.num(v);
+  };
+  Object.assign(Q, { genderOf, byGender, gradeText });
+
   // =====================================================================
   // Grade de widgets (compartilhada com o Portal da família)
   // =====================================================================
@@ -82,6 +109,49 @@
     balance(root);
   };
   const visiblePages = () => new Set(App.pages().map((p) => p.id));
+
+  /**
+   * Quadro "principal" de quem vê: o widget declara primary() (ex.: Atendimentos para a equipe de apoio,
+   * Mensalidades para a tesouraria) e sobe para logo abaixo dos números, em vez de esperar a sua vez no fim do painel.
+   */
+  const isPrimary = (w) => {
+    try {
+      return typeof w.primary === 'function' && !!w.primary();
+    } catch (err) {
+      return false;
+    }
+  };
+  /** Widgets soltos (sem grade), um embaixo do outro: usados para os principais na coluna da esquerda. */
+  const widgetStack = (defs) =>
+    defs.map((w, i) => {
+      let out;
+      try {
+        out = w.render();
+      } catch (err) {
+        console.error(`Quadro "${w.id}" do painel:`, err);
+        return '';
+      }
+      return isBlank(out) ? '' : html`<div class="pn-w pn-w-full pn-w-first" data-pn-w="${w.id}" data-pn-i="${i}" data-pn-first>${out}</div>`;
+    });
+  /**
+   * Na tela larga, o principal fica na coluna da esquerda só se isso não abrir buraco ao lado do "Hoje";
+   * senão desce para a linha inteira logo abaixo (no celular fica sempre logo depois dos números).
+   */
+  const placeFirst = (root) => {
+    const main = UI.$('.pn-main', root);
+    const col = UI.$('.pn-col', root);
+    const side = UI.$('.pn-side', root);
+    const slot = UI.$('[data-pn-first-slot]', root);
+    const boxes = UI.$$('.pn-col > [data-pn-first]', root);
+    if (!main || !col || !side || !slot || !boxes.length) return;
+    if (getComputedStyle(main).gridTemplateColumns.trim().split(/\s+/).length < 2) return;
+    const gap = parseFloat(getComputedStyle(col).rowGap) || 0;
+    const firstH = boxes.reduce((n, b) => n + b.offsetHeight + gap, 0);
+    const colH = col.offsetHeight;
+    const sideH = side.offsetHeight;
+    if (boxes.length === col.children.length) return; // só o principal na coluna: fica lá
+    if (Math.abs(colH - firstH - sideH) < Math.abs(colH - sideH)) boxes.forEach((b) => slot.appendChild(b));
+  };
 
   // =====================================================================
   // Atalhos (menu "Novo")
@@ -217,7 +287,7 @@
   const ordinal = (n) => `${n}ª`;
   const myRole = (c) => {
     const m = me();
-    if (c.teacherId === m.id) return Core.rules.homeroomLabel(c).replace('Professor(a) ', '').replace(/^./, (x) => x.toUpperCase());
+    if (c.teacherId === m.id) return ['Educação Infantil', 'Fundamental I'].includes(c.segment) ? 'Regente' : byGender(m, 'Conselheiro', 'Conselheira', 'Conselho da turma');
     if ((c.assistantIds || []).includes(m.id)) return 'Auxiliar';
     const subs = Object.entries(c.subjects || {}).filter(([, uid]) => uid === m.id).map(([sid]) => (Q.subject(sid) || {}).name).filter(Boolean);
     if (subs.length) return subs.length > 2 ? `${subs.slice(0, 2).join(', ')} e mais ${subs.length - 2}` : subs.join(' e ');
@@ -300,16 +370,22 @@
   // Hoje
   // =====================================================================
   const EVENT_TONE = (t) => (Q.EVENT_TYPES[t] || Q.EVENT_TYPES.evento).c;
+  /** Eventos do dia que dizem respeito à pessoa (escola toda e as suas turmas; calendario.js decide quando existe). */
   const eventsFor = (date) => {
+    if (typeof Q.relevantEvents === 'function') return Q.relevantEvents(date, date);
     const m = me();
     if (m.scope === 'todas') return Q.eventsOn(date);
     const ids = new Set(m.classIds || []);
     const byId = Q.classesById();
     return Q.eventsOn(date).filter((e) => !e.audience || e.audience.who === 'equipe' || Core.rules.audienceTouches(e.audience, ids, byId));
   };
+  /** De que turma/etapa é o evento ('' = escola toda). */
+  const eventWhere = (e) => (typeof Q.eventWhere === 'function' ? Q.eventWhere(e) : e.audience ? Q.audienceLabel(e.audience).replace(/^[^·]*·\s*/, '').replace('escola toda', '') : '');
   const eventRow = (e) => {
     const t = Q.EVENT_TYPES[e.type] || Q.EVENT_TYPES.evento;
-    return html`<li class="pn-ev"><span class="pn-ev-time num">${e.time || 'Dia todo'}</span><span class="ev-dot" style="--c:var(--cat-${EVENT_TONE(e.type)})" aria-hidden="true"></span><div class="grow"><b>${e.title}</b><span class="small muted">${t.label}${e.audience ? ` · ${Q.audienceLabel(e.audience)}` : ''}</span></div></li>`;
+    const where = eventWhere(e);
+    const staff = e.audience && e.audience.who === 'equipe';
+    return html`<li class="pn-ev"><span class="pn-ev-time num">${e.time || 'Dia todo'}</span><span class="ev-dot" style="--c:var(--cat-${EVENT_TONE(e.type)})" aria-hidden="true"></span><div class="grow"><b>${e.title}</b><span class="small muted">${t.label}${where ? ` · ${where}` : ''}${staff ? ' · só a equipe' : ''}</span></div></li>`;
   };
   const todayCard = (vis) => {
     const T = today();
@@ -317,8 +393,9 @@
     const off = dayOff(T);
     const evs = eventsFor(T);
     const next = eventsFor(tomorrow);
-    const bdays = can('alunos.ver') ? birthdaysToday(Q.students()) : [];
-    const upcoming = !evs.length && !next.length ? Q.upcoming(1, U.addDays(T, 2))[0] : null;
+    // o quadro "Aniversariantes" (próximos 7 dias, com os de hoje marcados) já está no painel: não repete aqui
+    const bdays = can('alunos.ver') && !App.widgets().some((w) => w.id === 'aniversariantes') ? birthdaysToday(Q.students()) : [];
+    const upcoming = !evs.length && !next.length ? (typeof Q.relevantEvents === 'function' ? Q.relevantEvents(U.addDays(T, 2)) : Q.upcoming(1, U.addDays(T, 2)))[0] : null;
     const cal = vis.has('calendario');
     return html`<section class="card pn-today" aria-labelledby="pn-today-h">
       <div class="card-head"><h2 id="pn-today-h">${icon('sun')}Hoje</h2>${cal ? html`<a class="sub" href="#calendario">Calendário</a>` : ''}</div>
@@ -336,7 +413,7 @@
             })}</ul>${bdays.length > 5 ? html`<p class="small muted">e mais ${bdays.length - 5}.</p>` : ''}</div>`
           : ''}
         ${next.length ? html`<div class="pn-sub"><h3>${icon('calendar')}Amanhã</h3><ul class="items pn-evs">${next.slice(0, 4).map(eventRow)}</ul></div>` : ''}
-        ${upcoming ? html`<p class="small muted pn-next">${icon('calendar')}<span>Próximo: <b>${upcoming.title}</b> · ${U.relDay(upcoming.date)} (${U.fmtDate(upcoming.date)})</span></p>` : ''}
+        ${upcoming ? html`<p class="small muted pn-next">${icon('calendar')}<span>Próximo: <b>${upcoming.title}</b>${eventWhere(upcoming) ? ` · ${eventWhere(upcoming)}` : ''} · ${U.relDay(upcoming.date)} (${U.fmtDate(upcoming.date)})</span></p>` : ''}
       </div>
     </section>`;
   };
@@ -379,7 +456,13 @@
       const n = new Set(Store.state.invoices.filter((i) => !i.paidAt && i.due < T).map((i) => i.studentId)).size;
       if (n) money = `${U.plural(n, 'aluno está', 'alunos estão')} com mensalidade em atraso.`;
     }
-    if (!parts.length) return money || 'Tudo em dia por aqui.';
+    if (!parts.length && !money) {
+      // escola sem turmas ou alunos (ou pessoa sem turma): não há o que estar "em dia"
+      if (emptySchool()) return App.widgets().some((w) => w.id === 'primeiros-passos') ? 'Vamos começar: siga os primeiros passos abaixo para preparar a escola.' : 'Ainda não há turmas ou alunos cadastrados.';
+      if (noClassesYet()) return 'As pendências do dia aparecem aqui assim que a escola ligar você a uma turma.';
+      return 'Tudo em dia por aqui.';
+    }
+    if (!parts.length) return money;
     const last = parts.pop();
     return `Você tem ${parts.length ? `${parts.join(', ')} e ${last}` : last}.${money ? ` ${money}` : ''}`;
   };
@@ -404,6 +487,15 @@
   // Escola vazia (o widget 'primeiros-passos' da gestão ocupa o topo; aqui só um apoio se ele não existir)
   // =====================================================================
   const emptySchool = () => me().scope === 'todas' && (!Q.classes().length || !Store.state.students.length);
+  /** Professor/auxiliar ainda sem turma vinculada. */
+  const noClassesYet = () => me().scope === 'vinculos' && !Q.myClasses().length;
+  /**
+   * Sem turmas ou alunos, os quadros do dia a dia diriam "Tudo em dia: as chamadas de hoje estão feitas",
+   * "Tudo lançado no bimestre"… sem haver nada para fazer. Ficam só os que valem para a escola vazia
+   * (primeiros passos, calendário, comunicados) e os acessos da equipe quando já há colegas convidados.
+   */
+  const SETUP_WIDGETS = new Set(['primeiros-passos', 'proximos-eventos', 'comunicados-fixados']);
+  const setupWidgets = () => App.widgets().filter((w) => SETUP_WIDGETS.has(w.id) || (w.id === 'equipe-acessos' && Q.staff().length > 1));
   const setupFallback = (vis) => {
     if (App.widgets().some((w) => w.id === 'primeiros-passos')) return '';
     const steps = [];
@@ -427,23 +519,28 @@
     const m = me();
     if (emptySchool()) {
       return html`${head(vis)}
-        ${widgetGrid()}
+        ${widgetGrid(setupWidgets())}
         ${setupFallback(vis)}
         ${quickActions()}`;
     }
     const mine = Q.myClasses();
     const kpis = m.scope !== 'vinculos' ? overview(vis) : [];
+    const defs = noClassesYet() ? setupWidgets() : App.widgets();
+    const firsts = defs.filter(isPrimary);
     const main = [];
     if (kpis.length) main.push(html`<section class="pn-kpis n${kpis.length}" aria-label="Visão geral">${kpis.map(kpiTile)}</section>`);
     if (mine.length) main.push(myClassesBlock(mine, vis));
     else if (m.scope === 'vinculos') main.push(noClassesBlock());
+    const firstHTML = widgetStack(firsts).filter(Boolean);
+    main.push(...firstHTML);
     return html`${head(vis)}
       ${quickActions()}
       <div class="pn-main ${main.length ? '' : 'is-solo'}">
         ${main.length ? html`<div class="pn-col">${main}</div>` : ''}
         <div class="pn-side">${todayCard(vis)}</div>
       </div>
-      ${widgetGrid()}`;
+      <div class="pn-first-slot" data-pn-first-slot></div>
+      ${widgetGrid(defs.filter((w) => !firsts.includes(w)))}`;
   };
 
   const AGENDA_DEFAULTS = () => ({ view: window.innerWidth < 700 ? 'dia' : 'semana', date: U.today(), classId: '', type: '', status: '', mine: false, opened: '' });
@@ -467,6 +564,7 @@
 
   const mount = (el) => {
     mountWidgets(el);
+    placeFirst(el);
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-pn-w]')) return; // os widgets cuidam dos próprios cliques
       const act = e.target.closest('[data-pn-act]');

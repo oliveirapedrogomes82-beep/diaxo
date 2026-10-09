@@ -127,6 +127,13 @@
     return html`<span class="pd-cell"><input class="grade-input ${err ? 'invalid' : g != null && g < Q.settings().passing ? 'low' : ''}" data-ng-sid="${s.id}" data-ng-t="${term}" value="${val}" inputmode="decimal" autocomplete="off" maxlength="4" aria-label="${label} de ${s.name}" ${err ? raw(`aria-invalid="true" title="${U.esc(err.message)}"`) : ''} ${editable ? '' : raw('disabled')}><span class="pd-cell-st" aria-hidden="true">${err ? icon('alert') : ''}</span></span>`;
   };
 
+  /** Alguma etapa não aberta na tabela tem nota trocada pela recuperação (marca "R")? */
+  const recUsed = (c, subjectId, sel) =>
+    Q.terms().some((t) => t !== sel && Q.roster(c.id).some((s) => {
+      const rec = Q.grade(s.id, subjectId, 'rec' + t);
+      return rec != null && rec > (Q.grade(s.id, subjectId, t) ?? -1);
+    }));
+
   const gradesTable = (v, c, subjectId, editable) => {
     const kids = Q.roster(c.id);
     const terms = Q.terms();
@@ -150,7 +157,8 @@
             const g = Q.grade(s.id, subjectId, t);
             const tg = Q.termGrade(s.id, subjectId, t);
             const rec = Q.grade(s.id, subjectId, 'rec' + t);
-            return html`<td class="center num hide-sm ${tone(tg)}" title="${rec != null ? `Nota ${fmt(g) || '—'} · recuperação ${fmt(rec)}` : ''}">${U.num(tg)}${rec != null && rec > (g ?? -1) ? html`<sup class="pd-rec-mark">R</sup>` : ''}</td>`;
+            const byRec = rec != null && rec > (g ?? -1);
+            return html`<td class="center num hide-sm ${tone(tg)}" title="${rec != null ? `Nota ${fmt(g) || '—'} · recuperação ${fmt(rec)}` : ''}">${U.num(tg)}${byRec ? html`<sup class="pd-rec-mark" aria-hidden="true">R</sup><span class="pd-rec-was">era ${fmt(g) || '—'}</span>` : ''}</td>`;
           }
           return html`<td class="center cur" data-l="${tl(t)}">${cellInput(v, s, subjectId, String(t), editable, `Nota do ${Q.termLabel(t)}`)}</td>
             <td class="center cur" data-l="Rec.">${cellInput(v, s, subjectId, 'rec' + t, editable, `Recuperação do ${Q.termLabel(t)}`)}</td>`;
@@ -182,16 +190,31 @@
     })}</div>`;
   };
 
+  /** Sem turma com alunos: quem monta as turmas (escopo "todas" ou turmas.gerenciar) recebe o caminho; os demais, "peça à coordenação". */
+  const emptyNoRoster = () => {
+    const anyClass = Q.classes().length > 0;
+    if (Store.me.scope === 'todas' || can('turmas.gerenciar')) {
+      const mk = !anyClass && can('turmas.gerenciar') && typeof Actions.novaTurma === 'function';
+      const enroll = anyClass && can('alunos.cadastrar') && typeof Actions.matricular === 'function';
+      return UI.empty({
+        icon: 'grade',
+        title: anyClass ? 'Nenhum aluno matriculado ainda' : 'Ainda não há turmas com alunos',
+        text: anyClass ? 'As turmas ainda não têm alunos. Matricule os alunos para lançar notas e pareceres.' : mk ? 'Crie as turmas, defina as disciplinas e matricule os alunos para lançar notas e pareceres.' : 'Quando as turmas forem criadas e os alunos matriculados, as notas aparecem aqui.',
+        action: html`${mk ? html`<button type="button" class="btn primary" data-ng-setup="turma">Criar turma</button>` : ''}${enroll ? html`<button type="button" class="btn primary" data-ng-setup="aluno">Matricular aluno</button>` : ''}`,
+      });
+    }
+    return UI.empty({
+      icon: 'grade',
+      title: 'Nenhuma turma com alunos',
+      text: can('notas.lancar') ? 'Você ainda não está em nenhuma turma com alunos. Peça à coordenação para incluir você na turma e na disciplina.' : 'Quando houver turmas com alunos, as notas aparecem aqui.',
+    });
+  };
+
   const render = (rest) => {
     const { v, list, c } = resolve(rest);
     const flag = html`<span class="saved-flag pd-flag" id="ng-flag" aria-live="polite">${v.flagAt ? html`${icon('check')} Salvo às ${v.flagAt}` : ''}</span>`;
     const closeBtn = canCloseTerms() ? html`<button type="button" class="btn" data-ng-terms>${icon('lock')}<span>Etapas e boletim</span></button>` : '';
-    if (!list.length)
-      return html`<div class="page-head"><div><h1>Notas</h1></div>${closeBtn}</div><section class="card">${UI.empty({
-        icon: 'grade',
-        title: 'Nenhuma turma com alunos',
-        text: can('notas.lancar') ? 'Você ainda não está em nenhuma turma com alunos. Peça à coordenação para incluir você na turma e na disciplina.' : 'Quando houver turmas com alunos, as notas aparecem aqui.',
-      })}</section>`;
+    if (!list.length) return html`<div class="page-head"><div><h1>Notas</h1></div>${closeBtn}</div><section class="card">${emptyNoRoster()}</section>`;
     const parecer = Q.evaluation(c.id) === 'parecer';
     const lead = parecer
       ? 'Na Educação Infantil a avaliação é por parecer descritivo: escreva como cada criança está se desenvolvendo na etapa. O texto é salvo sozinho.'
@@ -241,7 +264,7 @@
         <div class="card-head"><div><h2>${sub.name} · ${c.name}</h2><span class="sub">${teacher ? `Professor(a): ${teacher}` : 'Sem professor(a) definido(a)'}${!mine.has(sub.id) && can('notas.lancar') ? ' · somente consulta' : ''}</span></div>
 </div>
         ${gradesTable(v, c, sub.id, editable)}
-        <p class="small muted pd-grades-foot">Rec.: recuperação do ${Q.termLabel(v.term)} (vale a maior nota).${v.term === lastTerm() ? ` Final: recuperação final, para quem fechou o ano abaixo de ${U.num(Q.settings().passing)}.` : ''} Média: média anual das etapas.</p>
+        <p class="small muted pd-grades-foot">Rec.: recuperação do ${Q.termLabel(v.term)} (vale a maior nota).${v.term === lastTerm() ? ` Final: recuperação final, para quem fechou o ano abaixo de ${U.num(Q.settings().passing)}.` : ''} Média: média anual das etapas.${recUsed(c, sub.id, v.term) ? html`<span class="pd-rec-legend hide-sm"> <b class="pd-rec-mark">R</b> nas outras etapas: vale a nota da recuperação; embaixo, a nota que o aluno tinha tirado.</span>` : ''}</p>
       </section>`;
   };
 
@@ -251,7 +274,12 @@
   const mount = (el, rest) => {
     const { v, list, c } = resolve(rest);
     if (!list.length || !c) {
-      el.addEventListener('click', (e) => e.target.closest('[data-ng-terms]') && openTerms());
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-ng-terms]')) return openTerms();
+        const b = e.target.closest('[data-ng-setup]');
+        if (b && b.dataset.ngSetup === 'turma') Actions.novaTurma();
+        else if (b) Actions.matricular({});
+      });
       return;
     }
     const flag = () => UI.$('#ng-flag', el);
@@ -826,16 +854,18 @@
       list.sort((a, b) => b.miss / b.n - a.miss / a.n || a.c.name.localeCompare(b.c.name, 'pt-BR'));
       const shown = list.slice(0, 5);
       const total = list.reduce((t, x) => t + x.miss, 0);
+      const kind = evalKind();
+      const what = kind === 'parecer' ? 'Pareceres' : kind === 'ambos' ? 'Notas e pareceres' : 'Notas';
       return html`<section class="card pd-widget">
-        <div class="card-head"><h2>${icon('grade')}Notas do ${Q.termLabel(term)}</h2><a class="btn sm ghost" href="#notas">Abrir notas${icon('chevronRight')}</a></div>
+        <div class="card-head"><h2>${icon('grade')}${what} do ${Q.termLabel(term)}</h2><a class="btn sm ghost" href="#notas">${kind === 'parecer' ? 'Abrir pareceres' : 'Abrir notas'}${icon('chevronRight')}</a></div>
         <div class="card-body">${!editable
           ? html`<p class="pd-w-msg">${icon('lock')}<span>O ${Q.termLabel(term)} está fechado. Correções só com a coordenação.</span></p>`
           : list.length
-            ? html`<p class="small muted pd-w-total">${U.plural(total, 'lançamento pendente', 'lançamentos pendentes')}</p><ul class="items pd-w-list">${shown.map(
+            ? html`<p class="small muted pd-w-total">${kind === 'parecer' ? U.plural(total, 'parecer por escrever', 'pareceres por escrever') : U.plural(total, 'lançamento pendente', 'lançamentos pendentes')}</p><ul class="items pd-w-list">${shown.map(
                 (x) => html`<li><span class="pd-w-ic ${x.sub ? `c${x.sub.color}` : ''}">${icon(x.sub ? 'grade' : 'pencil')}</span><div class="grow"><b>${x.c.name}</b><div class="person-sub">${x.agg && Q.evaluation(x.c.id) !== 'parecer' ? `${U.plural(x.subjects, 'disciplina', 'disciplinas')} com notas faltando · ${U.int(x.miss)} de ${U.int(x.n)} em aberto` : `${x.sub ? x.sub.name : 'Pareceres'} · faltam ${x.miss} de ${x.n}`}</div>${UI.meter(((x.n - x.miss) / x.n) * 100)}</div>
-                  <button type="button" class="btn sm" data-w-grade="${x.c.id}" data-w-sub="${x.sub ? x.sub.id : ''}">${x.agg ? 'Ver' : 'Lançar'}</button></li>`,
+                  <button type="button" class="btn sm" data-w-grade="${x.c.id}" data-w-sub="${x.sub ? x.sub.id : ''}">${x.agg ? 'Ver' : x.sub ? 'Lançar' : 'Escrever'}</button></li>`,
               )}</ul>${list.length > shown.length ? html`<p class="small muted">e mais ${list.length - shown.length}.</p>` : ''}`
-            : html`<p class="pd-ok">${icon('checkCircle')}<span>Tudo lançado no ${Q.termLabel(term)}.</span></p>`}</div>
+            : html`<p class="pd-ok">${icon('checkCircle')}<span>${kind === 'parecer' ? 'Todos os pareceres escritos' : 'Tudo lançado'} no ${Q.termLabel(term)}.</span></p>`}</div>
       </section>`;
     },
     mount(el) {
@@ -875,5 +905,15 @@
 
   App.studentTab({ id: 'boletim', label: 'Boletim', order: 30, perm: 'notas.ver', render: renderBoletim, mount: mountBoletim });
 
-  App.action({ id: 'lancar-notas', label: 'Lançar notas', icon: 'grade', order: 30, perm: 'notas.lancar', keys: 'nota avaliação parecer boletim', run: () => App.go('notas') });
+  /** Como se avalia nas turmas de trabalho da pessoa: 'nota', 'parecer' (só Educação Infantil) ou 'ambos' — muda o nome do atalho. */
+  const evalKind = () => {
+    const mine = Q.myClasses().filter((c) => Q.roster(c.id).length);
+    const list = mine.length ? mine : gradeClasses();
+    const par = list.filter((c) => Q.evaluation(c.id) === 'parecer').length;
+    return !list.length ? '' : !par ? 'nota' : par === list.length ? 'parecer' : 'ambos';
+  };
+  const openGrades = () => App.go('notas');
+  App.action({ id: 'lancar-notas', label: 'Lançar notas', icon: 'grade', order: 30, perm: 'notas.lancar', keys: 'nota avaliação boletim', when: () => evalKind() === 'nota', run: openGrades });
+  App.action({ id: 'escrever-pareceres', label: 'Escrever pareceres', icon: 'grade', order: 30, perm: 'notas.lancar', keys: 'parecer descritivo avaliação educação infantil boletim', when: () => evalKind() === 'parecer', run: openGrades });
+  App.action({ id: 'lancar-notas-pareceres', label: 'Lançar notas e pareceres', icon: 'grade', order: 30, perm: 'notas.lancar', keys: 'nota parecer avaliação boletim', when: () => evalKind() === 'ambos', run: openGrades });
 })();

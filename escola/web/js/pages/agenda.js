@@ -580,8 +580,12 @@
     if (can('diario.ocorrencias')) out.push('ocorrencia');
     return out;
   };
+  /** Quem monta as turmas da escola (escopo "todas" ou turmas.gerenciar): numa escola sem turmas, o caminho é criá-las. */
+  const buildsClasses = () => Store.me.scope === 'todas' || can('turmas.gerenciar');
   /** Turmas em que posso publicar (as minhas primeiro). */
   const pubClasses = () => {
+    // escopo "todas" alcança qualquer turma (como no servidor); classIds do retrato só chega na próxima carga para uma turma recém-criada
+    if (me().scope === 'todas') return Q.workClasses();
     const ids = new Set(me().classIds || []);
     return Q.workClasses().filter((c) => ids.has(c.id));
   };
@@ -603,7 +607,7 @@
     const types = allowedTypes();
     if (!types.length) return UI.toast('Seu acesso não permite escrever na agenda. Fale com a direção.', { tone: 'bad' });
     const classes = pubClasses();
-    if (!classes.length) return UI.toast('Você ainda não está em nenhuma turma. Peça à coordenação para fazer o vínculo.', { tone: 'bad' });
+    if (!classes.length) return UI.toast(buildsClasses() ? 'Ainda não há turmas. Crie as turmas e matricule os alunos para usar a agenda.' : 'Você ainda não está em nenhuma turma. Peça à coordenação para fazer o vínculo.', { tone: 'bad' });
     const edit = o.edit ? o.edit : null;
     const editItems = edit ? wholeGroup(edit.lead).filter((d) => d.status !== 'cancelado') : [];
     let f;
@@ -1023,12 +1027,34 @@
       ${types.includes('recado') ? html`<button type="button" class="btn" data-ag-new="recado" data-date="${date || ''}">${icon('message')}Enviar recado</button>` : ''}`;
   };
 
+  /** Agenda sem nenhuma turma: explica o próximo passo conforme quem é. */
+  const emptyNoClasses = (canWrite) => {
+    if (buildsClasses()) {
+      const mk = can('turmas.gerenciar') && typeof Actions.novaTurma === 'function';
+      return UI.empty({
+        icon: 'bookOpen',
+        title: 'Ainda não há turmas',
+        text: mk ? 'Crie as turmas e matricule os alunos: depois os deveres, recados e autorizações chegam às famílias por aqui.' : 'Quando as turmas forem criadas e os alunos matriculados, a agenda das turmas aparece aqui.',
+        action: mk ? html`<button type="button" class="btn primary" data-ag-setup="turma">Criar turma</button>` : '',
+      });
+    }
+    return UI.empty({
+      icon: 'bookOpen',
+      title: 'Nenhuma turma para mostrar',
+      text: canWrite ? 'Você ainda não está em nenhuma turma. Peça à coordenação para incluir você na equipe da turma; depois você passa deveres e recados por aqui.' : 'Quando a equipe enviar deveres e recados para as turmas, eles aparecem aqui.',
+    });
+  };
+
   const renderStaff = () => {
     const v = ST();
     if (!U.isValidDate(v.date)) v.date = today();
     const T = today();
-    const types = allowedTypes();
+    // sem turma onde publicar, nada de botões de escrever (o compositor só diria "peça o vínculo")
+    const types = pubClasses().length ? allowedTypes() : [];
     const classes = Q.workClasses();
+    if (!classes.length && !allDiary().length)
+      return html`<div class="page-head"><div><h1>Agenda</h1><p class="lead">Deveres, recados, lembretes e autorizações que chegam às famílias, com quem já viu e deu ciente.</p></div></div>
+        <section class="card">${emptyNoClasses(allowedTypes().length > 0)}</section>`;
     if (v.classId && !classes.some((c) => c.id === v.classId)) v.classId = '';
     const items = filteredItems(v);
     const cards = groupsOf(items);
@@ -1069,15 +1095,27 @@
       </section>`;
     } else {
       const days = [];
+      // na semana atual, os dias que já passaram ficam recolhidos (uma linha com o total): o que é de hoje aparece no topo
+      const curWeek = weekS === weekStart(T);
+      if (!v.openDays || v.openDays.week !== weekS) v.openDays = { week: weekS };
       for (let i = 0; i < 7; i++) {
         const d = U.addDays(weekS, i);
         const its = cards.filter((c) => c.lead.date === d);
         if (!its.length && (i >= 5 || v.type || v.mine)) continue;
+        const headIn = html`<span class="date-chip ${d === T ? 'today' : ''}"><b>${Number(d.slice(8))}</b><span>${U.WD_SHORT[U.weekday(d)]}</span></span>
+            <div class="grow"><b>${U.cap(U.WEEKDAYS[U.weekday(d)])}</b>${d === T ? html` <span class="pill mark plain">Hoje</span>` : ''}${Q.holiday(d) ? html` <span class="small muted">· ${Q.holiday(d)}</span>` : ''}<div class="small muted">${its.length ? U.plural(its.length, 'envio', 'envios') : 'Nada enviado'}</div></div>`;
+        const list = its.length ? html`<div class="ag-list">${its.map((c) => cardHTML(c, { classFilter: v.classId }))}</div>` : '';
+        if (curWeek && d < T && its.length) {
+          days.push(html`<details class="ag-wday ag-wpast" data-ag-day="${d}" ${v.openDays[d] ? raw('open') : ''}>
+            <summary class="ag-wday-h">${headIn}<span class="ag-wpast-more" aria-hidden="true"><span class="ag-wpast-o">Ver</span><span class="ag-wpast-c">Recolher</span>${icon('chevronDown')}</span></summary>
+            ${list}
+          </details>`);
+          continue;
+        }
         days.push(html`<section class="ag-wday ${d === T ? 'is-today' : ''}">
-          <header class="ag-wday-h"><span class="date-chip ${d === T ? 'today' : ''}"><b>${Number(d.slice(8))}</b><span>${U.WD_SHORT[U.weekday(d)]}</span></span>
-            <div class="grow"><b>${U.cap(U.WEEKDAYS[U.weekday(d)])}</b>${Q.holiday(d) ? html` <span class="small muted">· ${Q.holiday(d)}</span>` : ''}<div class="small muted">${its.length ? U.plural(its.length, 'envio', 'envios') : 'Nada enviado'}</div></div>
+          <header class="ag-wday-h">${headIn}
             ${types.length && d >= T ? html`<button type="button" class="btn sm ghost" data-ag-newday="${d}" aria-label="Escrever na agenda de ${U.fmtDateLong(d)}">${icon('plus')}<span class="hide-xs">Adicionar</span></button>` : ''}</header>
-          ${its.length ? html`<div class="ag-list">${its.map((c) => cardHTML(c, { classFilter: v.classId }))}</div>` : ''}
+          ${list}
         </section>`);
       }
       content = html`<div class="ag-week">${days}</div>
@@ -1130,8 +1168,29 @@
       t && t.focus({ preventScroll: true });
     }
     bindCards(el);
+    // dias recolhidos da semana: lembra o que a pessoa abriu (a tela re-renderiza a cada sincronização)
+    el.addEventListener(
+      'toggle',
+      (e) => {
+        const day = e.target.dataset && e.target.dataset.agDay;
+        if (day && v.openDays) v.openDays[day] = e.target.open;
+      },
+      true,
+    );
+    // resultado da busca: leva ao cartão e o destaca
+    if (v.focusCard) {
+      const key = v.focusCard;
+      v.focusCard = '';
+      const card = UI.$$('[data-ag-card]', el).find((x) => x.dataset.agCard === key);
+      if (card) {
+        card.classList.add('ag-flash');
+        // depois da casca (que rola para o topo ao trocar de tela) e do fechamento da busca
+        setTimeout(() => card.isConnected && card.scrollIntoView({ block: 'center' }), 60);
+        setTimeout(() => card.classList.remove('ag-flash'), 2400);
+      }
+    }
     el.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-ag-view],[data-ag-nav],[data-ag-new],[data-ag-newday],[data-ag-newmenu],[data-ag-quick],[data-ag-goto],[data-ag-hist]');
+      const b = e.target.closest('[data-ag-view],[data-ag-nav],[data-ag-new],[data-ag-newday],[data-ag-newmenu],[data-ag-quick],[data-ag-goto],[data-ag-hist],[data-ag-setup]');
       if (!b) return;
       if (b.dataset.agView) {
         refocus = `[data-ag-view="${b.dataset.agView}"]`;
@@ -1144,6 +1203,7 @@
         v.date = n === 0 ? today() : U.addDays(v.date, n * (v.view === 'dia' ? 1 : 7));
         return App.render();
       }
+      if (b.dataset.agSetup) return typeof Actions.novaTurma === 'function' && Actions.novaTurma();
       if (b.dataset.agNew) return openComposer({ type: b.dataset.agNew, classId: v.classId, date: b.dataset.date || (v.view === 'dia' ? v.date : '') });
       if (b.dataset.agNewday) return openComposer({ classId: v.classId, date: b.dataset.agNewday });
       if (b.hasAttribute('data-ag-newmenu')) {
@@ -1190,7 +1250,7 @@
       history.replaceState(null, '', '#agenda');
       const d = Q.diaryItem(id);
       if (!d) return UI.toast('Item da agenda não encontrado. Ele pode ter sido cancelado.', { ic: 'info' });
-      Object.assign(v, { date: d.date, status: NEVER_SENT.has(d.status) ? d.status : '', type: '', mine: false, classId: v.classId && v.classId !== d.classId ? '' : v.classId });
+      Object.assign(v, { date: d.date, status: NEVER_SENT.has(d.status) ? d.status : '', type: '', mine: false, classId: v.classId && v.classId !== d.classId ? '' : v.classId, openDays: { week: weekStart(d.date), [d.date]: true } });
       setTimeout(() => {
         App.render();
         const card = findCard(cardKey(d));
@@ -1569,6 +1629,7 @@
     order: 12,
     size: 'half',
     perm: 'diario.publicar',
+    when: () => pubClasses().length > 0,
     render() {
       const T = today();
       const mine = groupsOf(Store.state.diary.filter((d) => d.authorId === me().id && d.status !== 'cancelado' && (d.date === T || (d.createdAt || '').slice(0, 10) === T)).sort(sortItems));
@@ -1669,25 +1730,41 @@
   });
 
   // ---------- menu "Novo" e busca ----------
-  App.action({ id: 'novo-dever', label: 'Passar dever de casa', icon: 'bookOpen', order: 5, perm: 'diario.publicar', keys: 'dever de casa tarefa lição agenda exercício', run: () => openComposer({ type: 'dever' }) });
-  App.action({ id: 'novo-recado', label: 'Enviar recado às famílias', icon: 'message', order: 6, perm: 'diario.publicar', keys: 'recado bilhete aviso agenda lembrete autorização família', run: () => openComposer({ type: 'recado' }) });
-  App.action({ id: 'nova-ocorrencia', label: 'Registrar ocorrência', icon: 'flag', order: 30, perm: 'diario.ocorrencias', keys: 'ocorrência comportamento atraso uniforme elogio advertência', run: () => openComposer({ type: 'ocorrencia' }) });
+  // sem turma onde publicar, as ações não aparecem (abririam só um aviso)
+  const hasPub = () => pubClasses().length > 0;
+  App.action({ id: 'novo-dever', label: 'Passar dever de casa', icon: 'bookOpen', order: 5, perm: 'diario.publicar', keys: 'dever de casa tarefa lição agenda exercício', when: hasPub, run: () => openComposer({ type: 'dever' }) });
+  App.action({ id: 'novo-recado', label: 'Enviar recado às famílias', icon: 'message', order: 6, perm: 'diario.publicar', keys: 'recado bilhete aviso agenda lembrete autorização família', when: hasPub, run: () => openComposer({ type: 'recado' }) });
+  App.action({ id: 'nova-ocorrencia', label: 'Registrar ocorrência', icon: 'flag', order: 30, perm: 'diario.ocorrencias', keys: 'ocorrência comportamento atraso uniforme elogio advertência', when: hasPub, run: () => openComposer({ type: 'ocorrencia' }) });
 
   App.searchProvider((query) => {
     if (!Store.family && !can('diario.ver')) return [];
     const T = today();
-    const list = Store.state.diary.filter((d) => (Store.family ? d.status === 'publicado' : true) && U.matches(query, d.title, typeLabel(d.type))).sort(sortItems).slice(0, 5);
-    return list.map((d) => ({
-      group: 'Agenda',
-      label: d.title,
-      icon: typeInfo(d.type).icon,
-      meta: `${typeLabel(d.type)} · ${d.date === T ? 'hoje' : shortDay(d.date)}`,
-      run: () => {
-        if (Store.family) return App.go('agenda');
-        Object.assign(ST(), { date: d.date, view: 'dia', status: NEVER_SENT.has(d.status) ? d.status : '', type: '', classId: '', mine: false });
-        App.go('agenda');
-      },
-    }));
+    // um resultado por envio (o mesmo envio tem um documento por turma ou por aluno), com para quem foi
+    const found = Store.state.diary.filter((d) => (Store.family ? d.status === 'publicado' : true) && U.matches(query, d.title, typeLabel(d.type))).sort(sortItems);
+    const shortList = (xs) => (xs.length <= 2 ? xs.join(', ') : `${xs.slice(0, 2).join(', ')} e mais ${xs.length - 2}`);
+    return groupsOf(found)
+      .slice(0, 5)
+      .map((c) => {
+        const d = c.lead;
+        const kids = c.items.filter((x) => x.studentId).map((x) => (Q.student(x.studentId) || {}).name).filter(Boolean);
+        // família: o nome do filho a que se refere; equipe: aluno(s) e turma(s)
+        const children = Store.family ? c.items.flatMap((x) => (x.studentId ? [Q.student(x.studentId)] : Q.myChildren().filter((k) => k.classId === x.classId))).filter(Boolean) : [];
+        const to = Store.family
+          ? shortList([...new Set(children.map((k) => U.firstName(k.name)))])
+          : [kids.length ? shortList(kids.map((n) => U.shortName(n))) : '', shortList(classNames(c.items))].filter(Boolean).join(' · ');
+        const state = !Store.family && d.status !== 'publicado' ? ` · ${(STATUS[d.status] || {}).label || ''}` : '';
+        return {
+          group: 'Agenda',
+          label: d.title,
+          icon: typeInfo(d.type).icon,
+          meta: [typeLabel(d.type), to, d.date === T ? 'hoje' : shortDay(d.date)].filter(Boolean).join(' · ') + state,
+          run: () => {
+            if (Store.family) return App.go('agenda');
+            Object.assign(ST(), { date: d.date, view: 'dia', status: NEVER_SENT.has(d.status) ? d.status : '', type: '', classId: '', mine: false, focusCard: c.key });
+            App.go('agenda');
+          },
+        };
+      });
   });
 
   Actions.novoItemAgenda = (opts = {}) => openComposer(opts);

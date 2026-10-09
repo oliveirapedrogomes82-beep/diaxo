@@ -121,6 +121,8 @@
 .pt-bol .pt-th-sub { display: block; font-size: .64rem; letter-spacing: .04em; color: var(--fg-3); font-weight: 600; }
 .pt-bol td.pt-locked { background: var(--surface-2); }
 .pt-rec { display: block; font-size: .7rem; font-weight: 500; color: var(--fg-3); white-space: nowrap; }
+.pt-bl-recs { list-style: none; margin: 0; padding: 8px 0 0; border-top: 1px dashed var(--line); display: grid; gap: 3px; }
+.pt-bl-recs b { color: var(--fg); font-weight: 700; }
 .pt-legend { margin-top: 10px; }
 .pt-bl { display: none; list-style: none; margin: 0; padding: 0; gap: 10px; }
 .pt-bl > li { padding: 12px 14px; display: grid; gap: 10px; }

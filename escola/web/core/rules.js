@@ -151,7 +151,8 @@
   const audienceLabel = (aud, classesById) => {
     const a = aud || {};
     const who = { todos: 'Todos', familias: 'Famílias', equipe: 'Só a equipe' }[a.who] || 'Todos';
-    const where = (a.classIds || []).map((id) => (classesById.get(id) || {}).name).filter(Boolean).concat(a.segments || []);
+    const names = (a.classIds || []).map((id) => (classesById.get(id) || {}).name);
+    const where = names.filter(Boolean).concat(names.some((n) => !n) ? ['outra turma'] : []).concat(a.segments || []);
     return where.length ? `${who} · ${where.join(', ')}` : `${who} · escola toda`;
   };
   /** Público alcança alguma das turmas informadas? (lista vazia = escola toda) */

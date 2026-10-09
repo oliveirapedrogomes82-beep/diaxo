@@ -478,8 +478,18 @@
       ${g.email ? html`<div class="al-contact">${icon('mail')}<a href="mailto:${g.email}" class="al-mail" title="${g.email}">${g.email}</a><button type="button" class="copy-btn" data-ald="copy" data-v="${g.email}" aria-label="Copiar e-mail de ${g.name}">${icon('copy')}</button></div>` : ''}`;
   };
 
+  /** Conta do portal do responsável, quando quem está usando pode "ver como" ela (Core.perms.canPreview). */
+  const previewTarget = (g) => {
+    if (!g.userId || g.bloqueado || Store.preview || !Store.me || !can('familias.acessos')) return null;
+    const fu = Store.byId('users', g.userId);
+    const meDoc = Store.byId('users', Store.me.id);
+    if (!fu || !meDoc || fu.role !== 'responsavel' || (fu.status && fu.status !== 'ativo')) return null;
+    return Core.perms.canPreview(meDoc, fu, Store.state) ? fu : null;
+  };
+
   const guardianCard = (s, g) => {
     const p = portalOf(g);
+    const viewAs = !s.noDigitalAccess && previewTarget(g);
     const manage = can('familias.acessos');
     const menuOn = can('alunos.cadastrar') || manage;
     const marks = [
@@ -495,7 +505,8 @@
       <div class="al-gcontact">${contactHTML(s, g)}</div>
       ${marks.length ? html`<div class="al-marks">${marks}</div>` : ''}
       <div class="al-portal"><span class="al-dot ${p.tone}" aria-hidden="true"></span><span class="grow"><span class="muted">Portal:</span> <b>${p.label}</b>${p.sub ? html`<span class="person-sub">${p.sub}</span>` : ''}</span>
-        ${invitable ? html`<button type="button" class="btn sm primary" data-ald="g-invite" data-g="${g.id}">${icon('send')}${p.expired ? 'Novo código' : 'Convidar'}</button>` : ''}</div>
+        ${invitable ? html`<button type="button" class="btn sm primary" data-ald="g-invite" data-g="${g.id}">${icon('send')}${p.expired ? 'Novo código' : 'Convidar'}</button>` : ''}
+        ${viewAs && !invitable ? html`<button type="button" class="btn sm ghost" data-ald="g-preview" data-g="${g.id}" title="Mostra o portal como ${g.name} vê, só leitura">${icon('eye')}Ver como</button>` : ''}</div>
     </article>`;
   };
 
@@ -603,6 +614,10 @@
           return g && guardianMenu(b, s, g);
         case 'g-invite':
           return g && Actions.convidarResponsavel(s.id, g.id, { btn: b });
+        case 'g-preview': {
+          const fu = g && previewTarget(g);
+          return fu && App.previewAs(fu.id);
+        }
         case 'k-add':
           return editPickup(s.id, null);
         case 'k-edit':
@@ -627,6 +642,8 @@
   // ---------- responsáveis ----------
   const guardianMenu = (anchor, s, g) => {
     const items = [];
+    const fu = !s.noDigitalAccess && previewTarget(g);
+    if (fu) items.push({ label: 'Ver como esta família', icon: 'eye', hint: 'Mostra o portal como a família vê, só leitura', fn: () => App.previewAs(fu.id) }, '-');
     if (can('alunos.cadastrar')) items.push({ label: 'Editar dados', icon: 'pencil', fn: () => editGuardian(s.id, g.id) });
     if (can('familias.acessos')) {
       if (!g.bloqueado && !s.noDigitalAccess) items.push({ label: g.userId ? 'Gerar novo código de acesso' : 'Convidar para o portal', icon: 'send', hint: g.userId ? 'Para quem esqueceu a senha ou perdeu o código' : '', fn: () => Actions.convidarResponsavel(s.id, g.id) });

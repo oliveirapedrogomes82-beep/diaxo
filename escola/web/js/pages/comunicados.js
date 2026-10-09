@@ -57,7 +57,7 @@
   };
   const audiencePill = (n) => {
     const who = (n.audience && n.audience.who) || 'todos';
-    const text = Store.family && K() ? K().familyTarget(n.audience) : Q.audienceLabel(n.audience);
+    const text = Store.family && K() ? K().familyTarget(n.audience) : K() && K().audienceText ? K().audienceText(n.audience) : Q.audienceLabel(n.audience);
     return html`<span class="pill plain co-aud ${who === 'equipe' ? 'is-staff' : 'info'}">${icon(who === 'equipe' ? 'briefcase' : 'users')}${text}</span>`;
   };
   const LONG = 420;

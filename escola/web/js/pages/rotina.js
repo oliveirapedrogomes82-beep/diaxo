@@ -80,6 +80,17 @@
       const x = valueOf(v, s.id, key);
       return Array.isArray(x) ? x.length : !!x;
     }).length;
+  const andList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
+  /** Momentos do dia que ainda faltam (com rascunho): ['Almoço de 2 crianças', 'Lanche da tarde', 'Sono']. */
+  const missingMoments = (v, kids, fields) =>
+    kids.length
+      ? fields
+          .map((f) => {
+            const n = kids.length - filledCount(v, kids, f.key);
+            return n <= 0 ? null : n === kids.length ? f.label : `${f.label} de ${U.plural(n, 'criança', 'crianças')}`;
+          })
+          .filter(Boolean)
+      : [];
 
   const optBtn = (sid, key, opt, on, extra = '') => html`<button type="button" class="ro-opt ${toneOf(opt)} ${extra}" data-ro-opt="${key}" data-sid="${sid}" data-v="${opt}" aria-pressed="${tf(on)}" ${extra === 'is-ro' ? raw('disabled') : ''}>${on ? icon('check') : ''}${opt}</button>`;
   const fieldOpts = (v, sid, f, ro) =>
@@ -94,8 +105,13 @@
   const renderStaff = (rest) => {
     const v = RS();
     const classes = infantClasses();
-    if (rest && rest[0] && classes.some((c) => c.id === rest[0])) v.classId = rest[0];
-    if (rest && rest[1] && U.isValidDate(rest[1]) && rest[1] <= today()) v.date = rest[1];
+    // #rotina/<turma>/<data> vale ao chegar pela rota; depois a turma e o dia escolhidos na tela prevalecem
+    const restKey = (rest || []).join('/');
+    if (restKey !== v.lastRest) {
+      v.lastRest = restKey;
+      if (rest && rest[0] && classes.some((c) => c.id === rest[0])) v.classId = rest[0];
+      if (rest && rest[1] && U.isValidDate(rest[1]) && rest[1] <= today()) v.date = rest[1];
+    }
     if (!classes.some((c) => c.id === v.classId)) v.classId = (classes.find((c) => editable(c.id)) || classes[0] || {}).id || '';
     if (!U.isValidDate(v.date) || v.date > today()) v.date = today();
     const fields = fieldsDef();
@@ -112,7 +128,7 @@
     const unsent = keysStored.filter((r) => !r.sentAt);
     const lastSent = sent.map((r) => r.sentAt).sort().pop();
     const changed = changedIds(v);
-    const allFilled = kids.filter((s) => fields.every((f) => valueOf(v, s.id, f.key))).length;
+    const missing = missingMoments(v, kids, fields);
     const fieldLabel = (k) => (k === 'bring' ? 'Mandar amanhã' : k === 'note' ? 'Observação' : (fields.find((f) => f.key === k) || {}).label || k);
     const holiday = Q.holiday(v.date);
     const noClass = !Q.isSchoolDay(v.date);
@@ -120,7 +136,13 @@
     let status;
     if (!keysStored.length) status = html`${UI.pill('Ainda não preenchida', 'warn')}<span class="grow small muted">Preencha ao longo do dia e envie às famílias no fim da tarde.</span>`;
     else if (!unsent.length) status = html`${UI.pill(`Enviada ${U.fmtInstant(lastSent)}`, 'ok')}<span class="grow small muted">As famílias de ${U.plural(sent.length, 'criança', 'crianças')} já veem. Correções feitas depois aparecem para elas na hora.</span>`;
-    else status = html`${UI.pill(sent.length ? `${unsent.length} ainda não enviada${unsent.length === 1 ? '' : 's'}` : 'Ainda não enviada', 'warn')}<span class="grow small muted">${sent.length ? `Enviada antes para ${U.plural(sent.length, 'criança', 'crianças')}${lastSent ? ` (${U.fmtInstant(lastSent)})` : ''}.` : `${U.plural(keysStored.length, 'criança preenchida', 'crianças preenchidas')}, só a equipe vê.`}</span>`;
+    else status = html`${UI.pill(sent.length ? `${unsent.length} ainda não enviada${unsent.length === 1 ? '' : 's'}` : 'Ainda não enviada', 'warn')}<span class="grow small muted">${sent.length ? `Enviada antes para ${U.plural(sent.length, 'criança', 'crianças')}${lastSent ? ` (${U.fmtInstant(lastSent)})` : ''}.` : `Começada para ${keysStored.length === kids.length && kids.length > 1 ? `as ${kids.length} crianças` : U.plural(keysStored.length, 'criança', 'crianças')}; só a equipe vê até você enviar.`}</span>`;
+    // o que falta preencher (a mesma conta dos números dos momentos), em vez de "0/15 completas"
+    const progress = !kids.length || (!keysStored.length && !changed.length)
+      ? ''
+      : missing.length
+        ? html`<span class="small ro-missing">${icon('clock')}<span><b>Falta:</b> ${andList(missing)}</span></span>`
+        : html`<span class="small ro-complete">${icon('checkCircle')}<span>Todos os momentos preenchidos</span></span>`;
 
     let body;
     if (!kids.length) body = html`<div class="card">${UI.empty({ icon: 'users', title: 'Nenhuma criança ativa nesta turma', text: 'Quando houver alunos matriculados, a rotina aparece aqui.' })}</div>`;
@@ -166,7 +188,7 @@
       </div>
       ${ro ? html`<div class="notice">${icon('eye')}<span class="grow">Você vê a rotina do ${c ? c.name : 'turma'}, mas só quem trabalha na turma pode preencher.</span></div>` : ''}
       ${noClass ? html`<div class="notice warn">${icon('calendar')}<span class="grow">${holiday ? `${holiday}: ` : ''}${U.cap(U.fmtDateLong(v.date))} não é dia letivo.</span></div>` : ''}
-      <section class="card ro-status">${icon('sun')}${status}<span class="small muted">${allFilled}/${kids.length} completas</span></section>
+      <section class="card ro-status">${icon('sun')}${status}${progress}</section>
       ${body}
       ${!ro && kids.length
         ? html`<div class="ro-savebar" role="region" aria-label="Salvar rotina">
@@ -261,6 +283,16 @@
       }
       if (b.hasAttribute('data-ro-save')) return save(v, b);
       if (b.hasAttribute('data-ro-send')) {
+        const miss = missingMoments(v, Q.students({ classId: v.classId }), fieldsDef());
+        if (
+          miss.length &&
+          !(await UI.confirm({
+            title: 'Enviar a rotina incompleta?',
+            text: html`<p>Ainda falta: <b>${andList(miss)}</b>.</p><p style="margin-top:8px">As famílias veem só o que foi preenchido. Se você completar depois, elas veem na hora.</p>`,
+            ok: 'Enviar assim',
+          }))
+        )
+          return;
         if (!(await save(v, b, true))) return;
         const res = await UI.act('routines.send', { classId: v.classId, date: v.date }, { btn: document.contains(b) ? b : null });
         if (res) UI.toast(`Rotina enviada às famílias de ${U.plural(res.result.sent, 'criança', 'crianças')}`, { ic: 'send' });
@@ -323,6 +355,67 @@
     },
     render: (rest) => renderStaff(rest),
     mount: (el) => mountStaff(el),
+  });
+
+  /** Turmas da Educação Infantil em que a pessoa preenche a rotina (regente/auxiliar com vínculo). */
+  const myInfantClasses = () => Q.myClasses().filter((c) => isInfant(c) && editable(c.id) && Q.students({ classId: c.id }).length);
+  const openRoutine = (classId) => {
+    const v = RS();
+    if (classId) v.classId = classId;
+    v.date = today();
+    App.go('rotina');
+  };
+
+  App.action({
+    id: 'rotina-dia',
+    label: 'Preencher rotina do dia',
+    icon: 'sun',
+    order: 4,
+    perm: 'diario.publicar',
+    keys: 'rotina educação infantil alimentação lanche almoço sono fralda humor creche',
+    when: () => myInfantClasses().length > 0,
+    run: () => {
+      const list = myInfantClasses();
+      openRoutine(list.length === 1 ? list[0].id : null);
+    },
+  });
+
+  App.widget({
+    id: 'rotina-hoje',
+    order: 11,
+    size: 'half',
+    perm: 'diario.publicar',
+    when: () => myInfantClasses().length > 0,
+    render() {
+      const T = today();
+      const fields = fieldsDef();
+      const school = Q.isSchoolDay(T);
+      const hol = Q.holiday(T);
+      const rows = myInfantClasses().map((c) => {
+        const kids = Q.students({ classId: c.id });
+        const v = { classId: c.id, date: T, drafts: RS().drafts };
+        const recs = kids.map((s) => Q.routine(c.id, T, s.id)).filter(Boolean);
+        const unsent = recs.filter((r) => !r.sentAt).length;
+        const lastSent = recs.map((r) => r.sentAt).filter(Boolean).sort().pop();
+        const missing = missingMoments(v, kids, fields);
+        const dirty = changedIds(v).length;
+        const state = !recs.length ? 'vazia' : unsent ? 'pendente' : 'enviada';
+        const pill = state === 'vazia' ? UI.pill('Não preenchida', 'warn') : state === 'pendente' ? UI.pill(unsent < recs.length ? `${unsent} não enviada${unsent === 1 ? '' : 's'}` : 'Não enviada', 'warn') : UI.pill(`Enviada ${U.fmtInstant(lastSent)}`, 'ok');
+        const sub = !recs.length && !dirty ? 'Preencha ao longo do dia e envie no fim da tarde.' : missing.length ? `Falta: ${andList(missing)}` : 'Todos os momentos preenchidos';
+        const btn = state === 'enviada' && !dirty ? html`<button type="button" class="btn sm ghost" data-w-ro="${c.id}">Ver</button>` : html`<button type="button" class="btn sm ${missing.length ? '' : 'primary'}" data-w-ro="${c.id}">${!recs.length ? 'Preencher' : missing.length ? 'Continuar' : 'Revisar e enviar'}</button>`;
+        return html`<li><span class="ro-w-ic" aria-hidden="true">${icon('sun')}</span><div class="grow"><div class="ro-w-top"><b>${c.name}</b>${pill}</div><div class="person-sub ro-w-sub">${sub}${dirty ? html` · <span class="ro-w-dirty">${U.plural(dirty, 'alteração não salva', 'alterações não salvas')}</span>` : ''}</div></div>${btn}</li>`;
+      });
+      return html`<section class="card ro-widget">
+        <div class="card-head"><h2>${icon('sun')}Rotina de hoje</h2><a class="btn sm ghost" href="#rotina">Abrir rotina${icon('chevronRight')}</a></div>
+        <div class="card-body">${school ? html`<ul class="items ro-w-list">${rows}</ul>` : html`<p class="ro-w-msg">${icon('sun')}<span>Hoje não é dia letivo${hol ? ` (${hol})` : ''}: não há rotina para enviar.</span></p>`}</div>
+      </section>`;
+    },
+    mount(el) {
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-w-ro]');
+        if (b) openRoutine(b.dataset.wRo);
+      });
+    },
   });
 
   // =====================================================================

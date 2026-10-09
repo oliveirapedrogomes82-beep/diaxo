@@ -13,7 +13,8 @@
 .ca-hol { font-size: .7rem; font-weight: 700; color: var(--bad); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .ca-month { min-width: 184px; text-align: center; font-size: 1.15rem; }
 .ca-sdays { white-space: nowrap; }
-.ca-filter { width: auto; max-width: 220px; }
+/* select.input.x: precisa vencer o "select.input { max-width: 100% }" geral de app.css */
+select.input.ca-filter { width: auto; max-width: 220px; }
 .ca-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -8px; }
 .ca-leg { height: 30px; padding: 0 11px; font-size: .82rem; }
 .ca-leg[aria-pressed="true"] { background: var(--surface); border-color: var(--line-strong); color: var(--fg-2); font-weight: 600; }
@@ -41,7 +42,9 @@
 .ca-next-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 0; border: 0; background: none; text-align: left; color: inherit; font: inherit; cursor: pointer; border-radius: 8px; }
 .ca-next-btn:hover .ca-next-t { color: var(--accent-text); text-decoration: underline; }
 .ca-next-btn .grow { display: grid; min-width: 0; }
-.ca-next-t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* título em até duas linhas (eventos como "Dia da família na Educação Infantil" não somem cortados) */
+.ca-next-t { font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.ca-w-others { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .ca-widget .card-head h2, .co-widget .card-head h2, .fi-widget .card-head h2 { display: flex; align-items: center; gap: 8px; }
 .ca-widget .card-head h2 .i, .co-widget .card-head h2 .i, .fi-widget .card-head h2 .i { color: var(--fg-3); }
 
@@ -87,11 +90,19 @@
 .fi-bad { color: var(--bad); }
 .fi-kpi-link { display: block; text-align: left; margin-top: 2px; font-size: inherit; }
 .fi-kpi-bad { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
-.fi-filter { width: auto; max-width: 180px; }
-.fi-search { max-width: 260px; flex: 1 1 200px; }
+select.input.fi-filter { width: auto; max-width: 200px; }
+/* largura para o texto de exemplo inteiro ("Buscar aluno ou responsável"); o espaçador vira margem automática
+   para sobrar lugar ao campo na mesma linha */
+.fi-search { max-width: 320px; flex: 1 1 250px; }
+.fi-toolbar > .grow { display: none; }
+.fi-toolbar > .seg { margin-right: auto; }
 .fi-table td .person-sub { display: block; }
 .fi-late { display: block; font-size: .78rem; color: var(--bad); font-weight: 600; }
 .fi-acts { text-align: right; white-space: nowrap; }
+/* na tabela, "Receber" é ação secundária (contornada); só nas cobranças atrasadas ganha a cor de destaque.
+   A ação principal da tela continua sendo "Registrar pagamento", no cabeçalho */
+.fi-acts .fi-pay-late { border-color: var(--primary); color: var(--accent-text); }
+.fi-acts .fi-pay-late:hover { background: var(--accent-soft); }
 .fi-acts > * + * { margin-left: 4px; }
 .fi-desc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fi-desc-col { color: var(--fg-2); }
@@ -225,7 +236,7 @@
   .ca-month, .fi-month { min-width: 0; font-size: 1.02rem; }
   .ca-toolbar .date-nav, .fi-monthbar .date-nav { flex: 1 1 100%; justify-content: space-between; }
   .ca-toolbar > .grow, .fi-toolbar > .grow { display: none; }
-  .ca-filter, .fi-filter { flex: 1 1 140px; max-width: none; }
+  select.input.ca-filter, select.input.fi-filter { flex: 1 1 140px; max-width: none; }
   .ca-legend { gap: 5px; }
   .ca-leg { height: 28px; padding: 0 9px; font-size: .78rem; }
   .co-search, .fi-search { max-width: none; flex: 1 1 100%; }
