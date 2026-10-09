@@ -503,7 +503,7 @@
       if (!infantil) {
         recent.concat(isSchoolDay(T) ? [T] : []).forEach((d, di) => {
           if (d === T && c.id !== C(2)) return;
-          const subs = Object.keys(c.subjects);
+          const subs = Object.keys(c.subjects).filter((s) => s !== S(8));
           const sid = subs[(di + c.name.length) % subs.length];
           item({
             type: 'dever', classId: c.id, subjectId: sid, date: d, due: addDays(d, weekday(d) === 5 ? 3 : 1), authorId: c.subjects[sid] || c.teacherId,
