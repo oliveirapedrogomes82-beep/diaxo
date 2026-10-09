@@ -638,6 +638,7 @@
   };
 
   const doPrint = () => {
+    if (!U.canPrint()) return;
     document.body.classList.add('pt-printing');
     const done = () => {
       document.body.classList.remove('pt-printing');

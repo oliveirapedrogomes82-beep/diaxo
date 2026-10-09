@@ -285,7 +285,7 @@
         } else if (a === 'export') {
           const table = exportTable(filtered());
           const items = [{ label: 'Copiar para planilha', icon: 'copy', hint: 'Cole no Excel ou no Google Planilhas', fn: () => UI.copy(U.toTSV(table), 'Tabela copiada. Cole na planilha.') }];
-          if (!U.inFrame) items.unshift({ label: 'Baixar planilha (.csv)', icon: 'download', hint: `${U.plural(table.length - 1, 'aluno', 'alunos')} da lista filtrada`, fn: () => U.download(`alunos-${U.today()}.csv`, U.toCSV(table)) });
+          items.unshift({ label: 'Baixar planilha (.csv)', icon: 'download', hint: `${U.plural(table.length - 1, 'aluno', 'alunos')} da lista filtrada`, fn: () => U.download(`alunos-${U.today()}.csv`, U.toCSV(table)) });
           UI.menu(x, items);
         }
         return;
@@ -1175,6 +1175,7 @@
 
   /** Imprime só a folha de cartões (o resto da tela fica escondido na impressão). */
   const printSheet = (content) => {
+    if (!U.canPrint()) return;
     document.querySelectorAll('.al-print-host').forEach((n) => n.remove());
     const host = document.createElement('div');
     host.className = 'al-print-host';

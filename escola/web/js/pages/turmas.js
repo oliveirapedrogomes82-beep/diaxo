@@ -467,8 +467,7 @@
       }
       return r;
     });
-    U.download(`${U.slug(c.name)}-alunos.csv`, U.toCSV([head, ...rows]));
-    UI.toast('Lista exportada (planilha CSV)', { ic: 'download' });
+    U.download(`${U.slug(c.name)}-alunos.csv`, U.toCSV([head, ...rows])).then((ok) => ok && UI.toast('Lista exportada (planilha CSV)', { ic: 'download' }));
   };
 
   // ---------- aba Equipe ----------

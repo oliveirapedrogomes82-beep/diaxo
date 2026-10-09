@@ -241,7 +241,7 @@
   };
   const schoolDays = (month) => monthDays(month).filter((d) => Q.isSchoolDay(d)).length;
 
-  // ---------- salvar no calendário do celular (.ics) ----------
+  // ---------- salvar no calendário do celular (.ics; fora da demonstração publicada, que não aceita .ics) ----------
   const icsEsc = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
   const icsFold = (line) => {
     const out = [];
@@ -266,8 +266,8 @@
     lines.push(`SUMMARY:${icsEsc(`${e.title} (${school})`)}`);
     const desc = [evType(e.type).label, Store.family ? familyTarget(e.audience) : audienceText(e.audience), e.notes].filter(Boolean).join('\n');
     lines.push(`DESCRIPTION:${icsEsc(desc)}`, 'END:VEVENT', 'END:VCALENDAR');
-    U.download(`${U.slug(e.title) || 'evento'}-${e.date}.ics`, lines.map(icsFold).join('\r\n') + '\r\n', 'text/calendar;charset=utf-8');
-    UI.toast('Arquivo do evento baixado. Abra para adicionar ao seu calendário.', { ic: 'calendar' });
+    U.download(`${U.slug(e.title) || 'evento'}-${e.date}.ics`, lines.map(icsFold).join('\r\n') + '\r\n', 'text/calendar;charset=utf-8')
+      .then((ok) => ok && UI.toast('Arquivo do evento baixado. Abra para adicionar ao seu calendário.', { ic: 'calendar' }));
   };
 
   // =====================================================================
@@ -293,7 +293,7 @@
         ${e.notes ? html`<p class="ca-ev-n">${textHTML(e.notes)}</p>` : ''}
       </div>
       <div class="ca-ev-acts">
-        <button type="button" class="icon-btn sm" data-ca-ics="${e.id}" aria-label="Salvar “${e.title}” no calendário do celular" title="Salvar no calendário do celular">${icon('download')}</button>
+        ${U.inFrame ? '' : html`<button type="button" class="icon-btn sm" data-ca-ics="${e.id}" aria-label="Salvar “${e.title}” no calendário do celular" title="Salvar no calendário do celular">${icon('download')}</button>`}
         ${manage
           ? html`<button type="button" class="icon-btn sm" data-ca-edit="${e.id}" aria-label="Editar “${e.title}”" title="Editar">${icon('pencil')}</button>
             <button type="button" class="icon-btn sm" data-ca-del="${e.id}" aria-label="Excluir “${e.title}”" title="Excluir">${icon('trash')}</button>`

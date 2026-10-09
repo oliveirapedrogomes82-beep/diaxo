@@ -146,8 +146,41 @@ const U = (() => {
       return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(';')).join('\r\n');
   const toTSV = (rows) => rows.map((r) => r.map((c) => cell(c).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+  const inFrame = (() => {
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true;
+    }
+  })();
+  // UI é carregada depois deste arquivo (e é um nome global, não uma propriedade de window).
+  const say = (text) => typeof UI !== 'undefined' && UI.toast(text, { tone: 'bad', ms: 6500 });
+  // Dentro de um quadro (a demonstração publicada) o navegador não baixa arquivos sozinho: quem salva é o
+  // recurso "downloads" da página, que pede a confirmação da pessoa. Fora de quadro, o download é direto.
+  let saver = null;
+  const frameSave = async (filename, blob) => {
+    saver = saver || (window.claude && typeof window.claude.use === 'function' ? Promise.resolve(window.claude.use('downloads')).catch(() => null) : Promise.resolve(null));
+    const dl = await saver;
+    if (!dl) {
+      say('Baixar arquivos não está disponível nesta página de demonstração.');
+      return false;
+    }
+    try {
+      await dl.save({ filename, data: blob });
+      return true;
+    } catch (e) {
+      const code = e && e.code;
+      if (code === 'declined') return false;
+      if (code === 'rate_limited') say('Já há um pedido para salvar um arquivo aberto. Conclua esse antes.');
+      else if (code === 'rejected_extension' || code === 'extension_not_enabled') say('Este tipo de arquivo não pode ser baixado nesta página de demonstração.');
+      else say('Não foi possível baixar o arquivo nesta página.');
+      return false;
+    }
+  };
+  /** Baixa um arquivo gerado no navegador. Resolve `true` quando o arquivo foi entregue para salvar. */
   const download = (filename, content, mime = 'text/csv;charset=utf-8') => {
     const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+    if (inFrame) return frameSave(filename, blob);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -156,6 +189,13 @@ const U = (() => {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return Promise.resolve(true);
+  };
+  /** Imprimir não abre nada dentro de um quadro: avisa em vez de falhar calado. */
+  const canPrint = () => {
+    if (!inFrame) return true;
+    if (typeof UI !== 'undefined') UI.toast('Imprimir não está disponível nesta página de demonstração. Na Caderneta instalada, este botão abre a impressão (e o "Salvar como PDF").', { ic: 'printer', ms: 7000 });
+    return false;
   };
   const slug = (s) => C.norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const greeting = () => {
@@ -165,17 +205,9 @@ const U = (() => {
   /** Links clicáveis num texto já escapado (só http/https, abrem em nova aba). */
   const linkify = (escaped) => escaped.replace(/\bhttps?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
 
-  const inFrame = (() => {
-    try {
-      return window.self !== window.top;
-    } catch (e) {
-      return true;
-    }
-  })();
-
   return {
     ...C, esc, MONTHS, MONTHS_SHORT, WEEKDAYS, WD_SHORT, today, fmtDate, fmtDayMonth, fmtDateLong, fmtMonth, fmtMonthShort, fmtInstant, ago, relDay,
     fmtTime, cap, money, moneyShort, num, int, pct, parseNum, parseGrade, matches, initials, firstName, shortName, colorIndex, age, plural,
-    whatsappLink, debounce, cell, toCSV, toTSV, download, slug, greeting, linkify, inFrame,
+    whatsappLink, debounce, cell, toCSV, toTSV, download, canPrint, slug, greeting, linkify, inFrame,
   };
 })();

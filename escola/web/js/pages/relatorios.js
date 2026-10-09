@@ -879,11 +879,11 @@
       if (e.target.closest('[data-rp-csv]')) {
         if (!last || !last.out.csv) return;
         const { rows, name } = last.out.csv();
-        U.download(`${name}-${today()}.csv`, U.toCSV(rows));
-        UI.toast(`Planilha baixada (${U.plural(Math.max(0, rows.filter((r) => r.length).length - 1), 'linha', 'linhas')})`, { ic: 'download' });
+        U.download(`${name}-${today()}.csv`, U.toCSV(rows)).then((ok) => ok && UI.toast(`Planilha baixada (${U.plural(Math.max(0, rows.filter((r) => r.length).length - 1), 'linha', 'linhas')})`, { ic: 'download' }));
         return;
       }
       if (e.target.closest('[data-rp-print]')) {
+        if (!U.canPrint()) return;
         try {
           window.print();
         } catch (err) {

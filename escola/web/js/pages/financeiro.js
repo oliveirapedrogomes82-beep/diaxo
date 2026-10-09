@@ -581,6 +581,7 @@
     </div>`;
   };
   const printHost = (content) => {
+    if (!U.canPrint()) return;
     document.querySelectorAll('.fi-print-host').forEach((n) => n.remove());
     const host = document.createElement('div');
     host.className = 'fi-print-host';
@@ -625,8 +626,7 @@
       const g = payer(s);
       rows.push([s ? s.name : '', s ? s.enrollment : '', className(s), g ? g.name : '', g ? g.phone || '' : '', invTitle(i), i.kind === 'avulsa' ? 'Avulsa' : 'Mensalidade', U.fmtDate(i.due), U.num(i.amount, 2), U.num(Q.amountDue(i, T), 2), STATUS[Q.invoiceStatus(i, T)][0], i.paidAt ? U.fmtDate(i.paidAt) : '', i.method || '', i.paidAt ? U.num(paidValue(i), 2) : '']);
     }
-    U.download(`${name}.csv`, U.toCSV(rows));
-    UI.toast(`Planilha baixada (${U.plural(list.length, 'cobrança', 'cobranças')})`, { ic: 'download' });
+    U.download(`${name}.csv`, U.toCSV(rows)).then((ok) => ok && UI.toast(`Planilha baixada (${U.plural(list.length, 'cobrança', 'cobranças')})`, { ic: 'download' }));
   };
   const exportDebtors = (list) => {
     const rows = [['Aluno', 'Matrícula', 'Turma', 'Responsável financeiro', 'Celular', 'E-mail', 'Cobranças em atraso', 'Vencida desde', 'Total atualizado']];
@@ -634,8 +634,7 @@
       const g = payer(d.student);
       rows.push([d.student.name, d.student.enrollment, className(d.student), g ? g.name : '', g ? g.phone || '' : '', g ? g.email || '' : '', d.invoices.map(invTitle).join(', '), U.fmtDate(d.oldest), U.num(d.total, 2)]);
     }
-    U.download(`inadimplentes-${today()}.csv`, U.toCSV(rows));
-    UI.toast(`Planilha baixada (${U.plural(list.length, 'aluno', 'alunos')})`, { ic: 'download' });
+    U.download(`inadimplentes-${today()}.csv`, U.toCSV(rows)).then((ok) => ok && UI.toast(`Planilha baixada (${U.plural(list.length, 'aluno', 'alunos')})`, { ic: 'download' }));
   };
 
   // =====================================================================
@@ -691,7 +690,7 @@
             <span class="grow"></span>
             ${classes.length > 1 ? html`<select class="input fi-filter" data-fi-class aria-label="Filtrar por turma"><option value="">Todas as turmas</option>${classes.map((c) => html`<option value="${c.id}" ${c.id === st.classId ? raw('selected') : ''}>${c.name}</option>`)}</select>` : ''}
             <label class="search-box fi-search"><span class="sr-only">Buscar aluno, responsável ou descrição</span>${icon('search')}<input class="input" type="search" data-fi-q value="${st.q}" placeholder="Buscar aluno ou responsável" autocomplete="off"></label>
-            ${U.inFrame ? '' : html`<button type="button" class="btn" data-fi-export title="Baixar a lista filtrada (.csv)">${icon('download')}<span class="hide-xs">Planilha</span></button>`}
+            <button type="button" class="btn" data-fi-export title="Baixar a lista filtrada (.csv)">${icon('download')}<span class="hide-xs">Planilha</span></button>
           </div>`
         : ''}
       <section class="card fi-listcard">
@@ -718,7 +717,7 @@
     const classes = Q.classes().filter((c) => all.some((d) => d.student.classId === c.id));
     const T = today();
     return html`
-      <div class="notice warn fi-debt-sum">${icon('alert')}<span class="grow"><b>${U.plural(all.length, 'aluno', 'alunos')} com pagamento atrasado · ${U.money(total)}</b> com multa e juros até hoje. O botão do WhatsApp abre uma mensagem pronta e educada para o responsável financeiro.</span>${U.inFrame ? '' : html`<button type="button" class="btn sm" data-fi-dexport>${icon('download')}Planilha</button>`}</div>
+      <div class="notice warn fi-debt-sum">${icon('alert')}<span class="grow"><b>${U.plural(all.length, 'aluno', 'alunos')} com pagamento atrasado · ${U.money(total)}</b> com multa e juros até hoje. O botão do WhatsApp abre uma mensagem pronta e educada para o responsável financeiro.</span><button type="button" class="btn sm" data-fi-dexport>${icon('download')}Planilha</button></div>
       ${all.length > 8
         ? html`<div class="toolbar fi-toolbar">
             <label class="search-box fi-search"><span class="sr-only">Buscar aluno ou responsável</span>${icon('search')}<input class="input" type="search" data-fi-dq value="${st.dq}" placeholder="Aluno ou responsável" autocomplete="off"></label>

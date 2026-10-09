@@ -170,8 +170,8 @@ const App = (() => {
   const downloadV1 = () => {
     const d = v1Data();
     if (!d) return;
-    U.download(`caderneta-versao-anterior-${U.today()}.json`, JSON.stringify({ app: 'caderneta-escolar', exportedAt: new Date().toISOString(), data: d }), 'application/json');
-    UI.toast('Arquivo baixado. Importe na Caderneta da escola pela conta titular.', { ic: 'download', ms: 7000 });
+    U.download(`caderneta-versao-anterior-${U.today()}.json`, JSON.stringify({ app: 'caderneta-escolar', exportedAt: new Date().toISOString(), data: d }), 'application/json')
+      .then((ok) => ok && UI.toast('Arquivo baixado. Importe na Caderneta da escola pela conta titular.', { ic: 'download', ms: 7000 }));
   };
 
   const loginScreen = (info = sessionInfo || {}) => {

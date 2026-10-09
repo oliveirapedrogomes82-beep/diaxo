@@ -794,6 +794,7 @@
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-bol-print]');
       if (!b) return;
+      if (!U.canPrint()) return;
       const internal = b.dataset.bolPrint === 'int';
       document.body.classList.add('pd-printing');
       document.body.classList.toggle('pd-print-internal', internal);

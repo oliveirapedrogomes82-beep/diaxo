@@ -184,8 +184,8 @@
         }),
       );
       const who = canAll() && s.userId ? '-' + U.slug(Q.userName(s.userId, 'pessoa')) : canAll() ? '' : '-minhas';
-      U.download(`atividades${who}-${U.today()}.csv`, U.toCSV(out));
-      UI.toast(`${list.length} registro${list.length === 1 ? '' : 's'} exportado${list.length === 1 ? '' : 's'}${more ? ` (limite de ${EXPORT_MAX})` : ''}.`, { ic: 'download' });
+      const ok = await U.download(`atividades${who}-${U.today()}.csv`, U.toCSV(out));
+      if (ok) UI.toast(`${list.length} registro${list.length === 1 ? '' : 's'} exportado${list.length === 1 ? '' : 's'}${more ? ` (limite de ${EXPORT_MAX})` : ''}.`, { ic: 'download' });
     } catch (err) {
       UI.errorToast(err);
     } finally {

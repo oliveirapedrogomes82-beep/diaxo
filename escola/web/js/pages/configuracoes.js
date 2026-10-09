@@ -1020,10 +1020,12 @@
     try {
       const blob = await Api.exportBackup(password, passphrase);
       const name = `backup-${U.slug(S().schoolName || 'escola') || 'escola'}-${today()}.${Api.isLocal ? 'json' : 'caderneta'}`;
-      U.download(name, blob);
-      lastBackup = new Date().toISOString();
-      form.reset();
-      UI.toast('Backup baixado. Guarde o arquivo em lugar seguro.', { ic: 'download' });
+      const ok = await U.download(name, blob);
+      if (ok) {
+        lastBackup = new Date().toISOString();
+        form.reset();
+        UI.toast('Backup baixado. Guarde o arquivo em lugar seguro.', { ic: 'download' });
+      }
     } catch (err) {
       if (err && /senha/i.test(err.message || '') && !/backup/i.test(err.message || '') && UI.markField(form, 'password', err.message)) return;
       if (err && /backup/i.test(err.message || '') && UI.markField(form, 'passphrase', err.message)) return;
