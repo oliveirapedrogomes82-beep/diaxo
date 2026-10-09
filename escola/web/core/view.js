@@ -260,7 +260,12 @@
         if (!inWindow(last) && m.status === 'resolvida') return null;
         // "registro" = nota interna da equipe na conversa: nunca vai para a família
         if (ctx.family) return ctx.studentIds.has(m.studentId) ? { ...m, posts: (m.posts || []).filter((p) => p.kind !== 'registro') } : null;
-        if (!can('mensagens.responder')) return null;
+        // quem faz a chamada sem responder mensagens ainda fica sabendo do aviso de falta (só a data, sem o texto)
+        if (!can('mensagens.responder')) {
+          if (!can('chamada.registrar') || (m.kind !== 'falta' && m.kind !== 'atestado') || !studentVisible(m.studentId)) return null;
+          const d = m.details || {};
+          return { id: m.id, studentId: m.studentId, kind: m.kind, status: m.status, createdAt: m.createdAt, details: { date: d.date, until: d.until }, posts: [], attachments: [], limited: true };
+        }
         return studentVisible(m.studentId) ? m : null;
       },
       support(r) {

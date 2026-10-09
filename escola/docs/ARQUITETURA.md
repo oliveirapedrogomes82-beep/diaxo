@@ -234,15 +234,22 @@ genéricas; logs só com método, rota, status e tempo.
 | `POST /api/cmd/:name` | `{input, requestId, password?}` → `{result, changes, rev, undoToken?, effects?}` |
 | `POST /api/undo` | `{token}` |
 | `POST /api/read` | `{itemIds}` registra "visualizado" (família) |
-| `GET /api/history/:coll` | histórico paginado (`classId`, `studentId`, `before`, `limit`) |
+| `GET /api/history/:coll` | histórico paginado (`classId`, `studentId`, `before`, `limit`; `as=<userId>` no "ver como": histórico da pessoa-alvo recortado pelo de quem vê) |
 | `POST /api/support/read` | `{id}` conteúdo do atendimento (auditado) |
 | `GET /api/audit` | registro de atividades (`before`, `limit`, `userId`) |
 | `POST /api/files`, `GET /api/files/:id` | upload (bytes; PNG/JPEG/WEBP/PDF, 10 MB) / download com checagem de visibilidade |
-| `GET /api/preview/:userId` | "ver como" (dominância; somente leitura) |
+| `GET /api/preview/:userId` | "ver como" (`Core.perms.canPreview`; somente leitura; `View.preview` = interseção do que a pessoa-alvo e quem vê podem ver) |
 | `POST /api/export`, `POST /api/import` | backup cifrado (senha) / importação (titular + senha) |
 | `POST /api/demo/login-as` | só com `--demo` |
 
-CLI: `node server/index.js --reset-owner-password` (só com acesso ao servidor).
+CLI: `node server/index.js --reset-owner-password` ou `--reset-password=<e-mail|celular>` (só com acesso ao servidor;
+é o caminho para contas que leem atendimentos sigilosos, cujo código a direção não gera).
+
+Outros detalhes: cada aba envia `X-Caderneta-Modo` (equipe/familia); se outra aba trocou a área da sessão, `/api/changes`
+responde `resync` e `/api/cmd` responde `conflict`. Entradas, primeiros acessos e aceites viram eventos de conta que chegam
+pela sincronização a quem gerencia contas. `me.update` não revela de quem é um celular já usado (mensagem neutra, com limite).
+Conta desativada que acerta a senha recebe 403 com explicação. A impressão digital da família inclui etapas liberadas,
+vínculo financeiro e a equipe que ela enxerga (mudou → o portal recarrega).
 
 ## 9. Front-end
 

@@ -109,6 +109,11 @@ do campo. Por isso:
 - Rotas profundas: `#configuracoes/<seção>` (escola, ano, etapas, disciplinas, agenda, financeiro, privacidade,
   acessos, virada, backup), `#relatorios/<relatório>`, `#boletim/<filho>`, `#filhos/<filho>`, `#mensagens/<id>`,
   `#equipe/<id>`, `#equipe/perfis`, `#turmas/<id>`.
+- No "ver como" (`Store.preview`), `Api.history` já pede o histórico da pessoa-alvo (`?as=`), uploads e trocas de
+  senha são recusados, e a casca põe `.is-preview` no app (botões primários, barras de salvar e `[data-write]` somem).
+  Marque com `data-write` qualquer outro controle que grave.
+- Caches de módulo (histórico carregado sob demanda etc.) devem ser presos ao dono: chave
+  `${Store.me.id}|${Store.family ? 'f' : 'e'}|${Store.preview ? Store.preview.id : ''}` (sair recarrega a página).
 - "Ver como" vale para contas de equipe que a pessoa domina e para contas de família dos alunos que ela alcança, se
   tiver `familias.acessos` (`Core.perms.canPreview`); use `App.previewAs(userId)`.
 - **Ações compartilhadas já existentes** (chame com guarda `typeof Actions.x === 'function'`):
@@ -123,7 +128,8 @@ do campo. Por isso:
 - **Consultas extras** (de `turmas.js`): `Q.canTakeLesson`, `Q.rollsToDo(date)` → `[{klass, missing}]`,
   `Q.rollState`, `Q.absenceStreaks`, `Q.absenceAlert`, `Q.studentAverage`, `Q.classStats`,
   `Q.subjectAttendance`, `Q.atRisk`, `Q.attendanceRecords`, `Q.homeroom`, `Q.gradeTone`.
-  `Q.pendingRolls()` usa `Q.rollsToDo` quando ele existe. `window.AlunosKit` tem utilitários da ficha
+  `Q.pendingRolls()` usa `Q.rollsToDo` quando ele existe. De `mensagens.js`: `Q.absenceNotices(date)` →
+  `{studentId: {id, kind, reason, from, until, message}}` (avisos de falta/atestado da família para a chamada). `window.AlunosKit` tem utilitários da ficha
   (situação da matrícula, situação no portal, etc.).
 - **Abas da ficha do aluno** aceitam `badge(student)` (número ou `{n, tone, title}`); um erro numa aba fica
   contido nela. Rotas: `#alunos/<id>/<aba>`.
