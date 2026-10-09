@@ -45,6 +45,8 @@
   const roleLabel = (r) => P.roleLabel(r);
   const roleGroup = (r) => (P.ROLE[r] ? P.ROLE[r].group : 'Administrativo');
   const titleOf = (u) => (u && u.title) || roleLabel(u && u.role);
+  /** Formas flexionadas de um título com "(a)": 'Psicopedagogo(a)' → ['Psicopedagoga', 'Psicopedagogo']; sem "(a)", null. */
+  const titleForms = (label) => (label && /\(a\)/.test(label) ? [label.replace(/o\(a\)/g, 'a').replace(/\(a\)/g, 'a'), label.replace(/\(a\)/g, '')] : null);
   /** O cargo acrescenta algo ao título? ("Professora" já diz "Professor(a)"; "Recepção" não diz "Portaria / recepção") */
   const roleAdds = (u) => {
     if (!u || !u.title) return false;
@@ -291,9 +293,14 @@
       .sort((a, b) => (a.classId < b.classId ? -1 : 1));
   const showArea = (d) => !!d.area || !!(P.ROLE[d.role] || {}).area || d.sel.has('atendimentos.registrar') || d.sel.has('atendimentos.conteudo');
 
+  const titleHint = (d) => {
+    const forms = d.role ? titleForms(roleLabel(d.role)) : null;
+    if (!forms) return 'Opcional. Em branco, aparece o nome do cargo.';
+    return html`Opcional. Em branco, aparece “${roleLabel(d.role)}”. Usar ${html.join(forms.map((f) => html`<button type="button" class="link small" data-title-sug="${f}">${f}</button>`), ' ou ')}`;
+  };
   const personDefs = (d) => [
     { name: 'name', label: 'Nome completo', required: true, full: true, maxlength: 120, attrs: raw('autofocus') },
-    { name: 'title', label: 'Como aparece para a equipe e as famílias', placeholder: d.role ? roleLabel(d.role) : 'Ex.: Professora de Inglês', hint: 'Opcional. Em branco, aparece o nome do cargo.', maxlength: 80, full: true },
+    { name: 'title', label: 'Como aparece para a equipe e as famílias', placeholder: d.role ? roleLabel(d.role) : 'Ex.: Professora de Inglês', hint: titleHint(d), maxlength: 80, full: true },
     { name: 'email', label: 'E-mail', type: 'email', placeholder: 'nome@escola.com.br', maxlength: 160, autocomplete: 'off' },
     { name: 'phone', label: 'Celular', type: 'tel', placeholder: '(11) 91234-5678' },
   ];
@@ -338,7 +345,7 @@
     const base = new Set(P.profile(d.role, settings()));
     const def = defaultSel(d.role);
     return html`<div class="eq-perm-head">
-        <div class="grow"><p><b>${roleLabel(d.role)}</b>: o padrão do cargo já vem marcado. Marque o que mais a pessoa pode fazer (<span class="eq-tag extra">extra</span>) ou desmarque o que ela não deve acessar (<span class="eq-tag off">retirado</span>).</p>
+        <div class="grow"><p><b>${roleLabel(d.role)}</b>: o padrão do cargo já vem marcado. Marque o que mais a pessoa pode fazer <span class="eq-nowrap">(<span class="eq-tag extra">extra</span>)</span> ou desmarque o que ela não deve acessar <span class="eq-nowrap">(<span class="eq-tag off">retirado</span>)</span>.</p>
         <p class="eq-sums" data-sums>${permSummary(d.sel, base)}</p></div>
         <button type="button" class="btn sm" data-reset-perms ${sameSet(d.sel, def) ? raw('disabled') : ''}>${icon('undo')}Voltar ao padrão do cargo</button>
       </div>
@@ -446,10 +453,15 @@
     const scope = d.scope === 'todas' ? 'Todas as turmas' : d.scope === 'segmentos' ? `Etapas: ${d.segments.join(', ')}` : 'Só onde atua';
     const nothing = d.scope === 'vinculos' && !links.length && !d.students.length;
     const edit = (step) => html`<button type="button" class="link small" data-go="${step}">Alterar</button>`;
+    const shownTitle = d.title || roleLabel(d.role);
+    const forms = titleForms(shownTitle);
+    const titleCell = forms
+      ? html`${shownTitle}<span class="eq-title-pick"><span class="small muted">As famílias leem isto ao lado do nome. Escolha a forma:</span><span class="chips">${forms.map((f) => html`<button type="button" class="chip" data-title-pick="${f}">${f}</button>`)}</span></span>`
+      : shownTitle;
     return html`<div class="eq-review">
       ${nothing ? html`<div class="notice warn">${icon('alert')}<span class="grow">${U.firstName(d.name) || 'A pessoa'} não verá nenhum aluno até ser vinculada a uma turma ou a alunos.</span><button type="button" class="btn sm" data-go="3">Vincular turmas</button></div>` : ''}
       <section class="eq-rev-sec"><div class="eq-rev-head"><h3>Pessoa</h3>${edit(0)}</div>
-        ${UI.kv([['Nome', d.name], ['Aparece como', d.title || roleLabel(d.role)], ['E-mail', d.email], ['Celular', d.phone]])}</section>
+        ${UI.kv([['Nome', d.name], ['Aparece como', titleCell], ['E-mail', d.email], ['Celular', d.phone]])}</section>
       <section class="eq-rev-sec"><div class="eq-rev-head"><h3>Cargo e acessos</h3>${edit(2)}</div>
         ${UI.kv([
           ['Cargo', d.roleNote ? html`${roleLabel(d.role)} <span class="eq-tag off">antes: ${roleLabel(d.orig)}</span>` : roleLabel(d.role)],
@@ -685,6 +697,25 @@
           if (t.closest('[data-next]')) return goto(d.step + 1);
           const sv = t.closest('[data-save]');
           if (sv) return save(sv);
+          const sug = t.closest('[data-title-sug]');
+          if (sug) {
+            const inp = el.querySelector('[data-step-form] [name="title"]');
+            if (inp) {
+              inp.value = sug.dataset.titleSug;
+              inp.focus();
+            }
+            api.setDirty(true);
+            return;
+          }
+          const pick = t.closest('[data-title-pick]');
+          if (pick) {
+            d.title = pick.dataset.titlePick;
+            api.setDirty(true);
+            draw(true);
+            const head = el.querySelector('.eq-review [data-go="0"]');
+            head && head.focus({ preventScroll: true });
+            return;
+          }
           if (t.closest('[data-reset-perms]')) {
             d.sel = defaultSel(d.role);
             d.note = 'Os acessos voltaram ao padrão do cargo.';
@@ -1361,7 +1392,7 @@
       const expiring = acc.filter(([, a]) => a.key === 'vencido' || (a.expiring && a.exp <= 7));
       const block = (title, ic, tone, rows, meta) =>
         rows.length
-          ? html`<div class="eq-w-block"><h3>${icon(ic)}${title}<span class="eq-count">${rows.length}</span></h3><ul class="items">${rows.slice(0, 4).map(([u, a]) => html`<li>${UI.avatar(u.name, 'sm')}<span class="grow"><a class="person-name" href="#equipe/${u.id}">${u.name}</a><span class="person-sub">${meta(u, a)}</span></span>${canManage(u) ? html`<button type="button" class="btn sm" data-w-invite="${u.id}">${icon('key')}<span class="hide-xs">Código</span></button>` : ''}</li>`)}</ul>${rows.length > 4 ? html`<a class="small" href="#equipe">e mais ${rows.length - 4}…</a>` : ''}</div>`
+          ? html`<div class="eq-w-block"><h3>${icon(ic)}${title}<span class="eq-count">${rows.length}</span></h3><ul class="items">${rows.slice(0, 4).map(([u, a]) => html`<li>${UI.avatar(u.name, 'sm')}<span class="grow"><a class="person-name" href="#equipe/${u.id}" title="${u.name}">${u.name}</a><span class="person-sub">${meta(u, a)}</span></span>${canManage(u) ? html`<button type="button" class="btn sm" data-w-invite="${u.id}">${icon('key')}<span class="hide-xs">Código</span></button>` : ''}</li>`)}</ul>${rows.length > 4 ? html`<a class="small" href="#equipe">e mais ${rows.length - 4}…</a>` : ''}</div>`
           : '';
       const any = pending.length || never.length || expiring.length;
       return html`<section class="card eq-widget">

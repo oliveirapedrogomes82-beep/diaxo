@@ -146,6 +146,8 @@
 .mg-hours b { color: var(--fg); }
 .mg-hours-phone { white-space: nowrap; }
 .mg-fconvs .card-head { gap: 10px 14px; }
+.mg-fconvs .card-head h2, .mg-stab .card-head h2 { display: flex; align-items: center; gap: 8px; }
+.mg-fconvs .card-head h2 > .i, .mg-stab .card-head h2 > .i { color: var(--fg-3); }
 .mg-flist, .mg-slist { list-style: none; margin: 0; padding: 0; }
 .mg-flist > li + li, .mg-slist > li + li { border-top: 1px solid var(--line); }
 .mg-fitem, .mg-sitem { display: flex; align-items: center; gap: 12px; padding: 12px 4px; color: inherit; text-decoration: none; border-radius: var(--radius-sm); }

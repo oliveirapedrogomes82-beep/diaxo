@@ -25,6 +25,9 @@
 .at-page { display: grid; gap: 18px; min-width: 0; }
 .at-privacy { font-size: .88rem; }
 .at-privacy > .i { color: var(--cat-7); }
+/* títulos de cartão com ícone (tela, aba da ficha e adaptações), no mesmo padrão dos outros módulos */
+.at-page .card-head h2, .at-stab .card-head h2, .at-apoio .card-head h2 { display: flex; align-items: center; gap: 8px; }
+.at-page .card-head h2 > .i, .at-stab .card-head h2 > .i, .at-apoio .card-head h2 > .i { color: var(--fg-3); }
 .at-filters { display: grid; grid-template-columns: minmax(200px, 1.4fr) repeat(3, minmax(140px, 1fr)) auto; gap: 10px; align-items: center; }
 .at-filters .search-box { flex: none; }
 .at-mine { white-space: nowrap; }
