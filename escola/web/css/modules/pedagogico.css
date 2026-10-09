@@ -126,6 +126,14 @@
 .pd-who-sub .pill { height: 20px; font-size: .72rem; }
 .pd-low { color: var(--bad); font-weight: 600; }
 .pd-reason { color: var(--fg-2); }
+/* aviso de falta / atestado enviado pela família (mensagens) */
+.pd-fam-row { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: -6px; font-size: .8rem; min-width: 0; }
+.pd-fam-pill { height: 20px; font-size: .72rem; }
+.pd-fam-pill .i { width: 12px; height: 12px; }
+.pd-fam-why { color: var(--fg-2); overflow-wrap: anywhere; min-width: 0; }
+.pd-just-fam { margin-bottom: 12px; }
+.pd-w-fam { display: inline-flex; gap: 4px; align-items: center; color: var(--accent-text); }
+.pd-w-fam .i { width: 12px; height: 12px; }
 .pd-reason-row { grid-column: 2 / -1; }
 .pd-reason-input { min-height: 34px; padding: 5px 10px; font-size: .88rem; }
 .pd-roll .bubble[disabled] { opacity: .45; pointer-events: none; }
@@ -272,7 +280,7 @@
   .pd-lesson { flex: 0 0 148px; }
   .pd-roll li { grid-template-columns: minmax(0, 1fr) auto; }
   .pd-roll li .n { display: none; }
-  .pd-reason-row { grid-column: 1 / -1; }
+  .pd-reason-row, .pd-fam-row { grid-column: 1 / -1; }
   .pd-roll .bubble { width: 34px; height: 34px; }
   .pd-notices { padding: 12px 12px 0; }
   .pd-content { padding: 12px; }

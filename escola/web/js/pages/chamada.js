@@ -80,10 +80,17 @@
     }
     return d || null;
   };
-  const markOf = (rec, d, sid) => (d && Object.prototype.hasOwnProperty.call(d.marks, sid) ? d.marks[sid] : (rec && rec.marks && rec.marks[sid]) || 'P');
+  /** Marcação atual: rascunho → registro salvo → sugestão (aviso de falta da família, só sem registro) → presente. */
+  const markOf = (rec, d, sid, sugg = null) => {
+    if (d && Object.prototype.hasOwnProperty.call(d.marks, sid)) return d.marks[sid];
+    if (rec) return (rec.marks && rec.marks[sid]) || 'P';
+    return (sugg && sugg.get(sid)) || 'P';
+  };
   const reasonOf = (rec, d, sid) => (d && Object.prototype.hasOwnProperty.call(d.reasons, sid) ? d.reasons[sid] : ((rec && rec.reasons) || {})[sid] || '');
-  const changes = (rec, d) => {
+  const changes = (rec, d, sugg = null) => {
     const out = { marks: {}, reasons: {}, content: undefined };
+    // chamada nova: as faltas avisadas pela família (e não mexidas) vão junto
+    if (!rec && sugg) sugg.forEach((m, sid) => !(d && Object.prototype.hasOwnProperty.call(d.marks, sid)) && m !== 'P' && (out.marks[sid] = m));
     if (!d) return out;
     for (const [sid, m] of Object.entries(d.marks)) {
       const base = rec && rec.marks ? rec.marks[sid] : undefined;
@@ -99,6 +106,30 @@
     return Object.keys(ch.marks).length > 0 || Object.keys(ch.reasons).length > 0 || ch.content !== undefined;
   };
   const rosterOf = (v) => R.roster(Store.state, v.classId, v.date, v.period || 0).slice().sort(Q.cmpName);
+
+  // ---------- avisos de falta das famílias (mensagens "Avisar falta" / "Enviar atestado") ----------
+  /** studentId → aviso que cobre o dia (Q.absenceNotices vem de mensagens.js; quem não vê mensagens não recebe nenhum). */
+  const famNotices = (date) => (typeof Q.absenceNotices === 'function' ? Q.absenceNotices(date) : new Map());
+  /** Sugestões para uma chamada ainda não registrada: quem a família avisou que falta já começa com F. */
+  const suggestionsFor = (rec, roster, notices) => {
+    if (rec || !notices.size) return null;
+    const out = new Map();
+    roster.forEach((s) => notices.has(s.id) && out.set(s.id, 'F'));
+    return out.size ? out : null;
+  };
+  const noticeLabel = (n) => (n.kind === 'atestado' ? 'Atestado da família' : 'Família avisou');
+  const noticeWhen = (n) => (n.until && n.until !== n.from ? ` (${U.fmtDate(n.from).slice(0, 5)} a ${U.fmtDate(n.until).slice(0, 5)})` : '');
+  /** Texto para o motivo da justificativa, a partir do aviso. */
+  const noticeJustification = (n) => {
+    const base = n.kind === 'atestado' ? 'Atestado médico enviado pela família' : 'Família avisou por mensagem';
+    return `${base}${n.reason && n.kind !== 'atestado' ? `: ${n.reason}` : ''}`.slice(0, 300);
+  };
+  /** Linha inteira abaixo do nome: "Família avisou (07/10 a 10/10) · Está com febre…". */
+  const famRow = (s, ctx) => {
+    const n = ctx.notices && ctx.notices.get(s.id);
+    if (!n) return '';
+    return html`<div class="pd-fam-row"><span class="pill ${n.kind === 'atestado' ? 'warn' : 'info'} plain pd-fam-pill">${icon(n.kind === 'atestado' ? 'file' : 'message')}${noticeLabel(n)}</span><span class="pd-fam-why">${noticeWhen(n).trim()}${noticeWhen(n) && n.reason && n.kind !== 'atestado' ? ' · ' : ''}${n.kind !== 'atestado' ? n.reason : ''}</span></div>`;
+  };
 
   // =====================================================================
   // Tela
@@ -155,7 +186,7 @@
   };
 
   const editRow = (s, i, ctx) => {
-    const m = markOf(ctx.rec, ctx.d, s.id);
+    const m = markOf(ctx.rec, ctx.d, s.id, ctx.sugg);
     const opts = ctx.justify ? ['P', 'F', 'J', 'A'] : ['P', 'F'];
     if (!opts.includes(m)) opts.push(m);
     const sub = rowSub(s, ctx);
@@ -167,6 +198,7 @@
       <div class="bubbles" role="radiogroup" aria-label="Presença de ${U.firstName(s.name)}">${opts.map(
         (k) => html`<button type="button" role="radio" class="bubble ${k}" data-ch-mark="${k}" aria-checked="${tf(m === k)}" tabindex="${m === k ? '0' : '-1'}" aria-label="${MARKS[k].label}" title="${MARKS[k].label} (tecla ${k})" ${!ctx.justify && (k === 'J' || k === 'A') ? raw('disabled') : ''}>${k}</button>`,
       )}</div>
+      ${famRow(s, ctx)}
       ${ctx.justify && (m === 'J' || m === 'A') ? reasonRow(s, reasonOf(ctx.rec, ctx.d, s.id)) : ''}
     </li>`;
   };
@@ -182,12 +214,13 @@
       <span class="n">${i + 1}</span>
       <a class="who" href="#alunos/${s.id}/frequencia">${UI.avatar(s.name, 'sm', s.photo)}<span class="pd-who-text"><span class="person-name">${s.name}</span>${sub.length ? html`<span class="pd-who-sub">${sub}</span>` : ''}</span></a>
       <div class="pd-ro-end">${UI.pill(MARKS[m].short, MARKS[m].tone)}${ctx.justifyBtn && m !== 'P' ? html`<button type="button" class="btn sm" data-ch-justify="${s.id}" aria-label="Justificar a falta de ${s.name}">${icon('pencil')}<span class="hide-xs">Justificar</span></button>` : ''}</div>
+      ${famRow(s, ctx)}
     </li>`;
   };
 
-  const counts = (roster, rec, d) => {
+  const counts = (roster, rec, d, sugg = null) => {
     const n = { P: 0, F: 0, J: 0, A: 0 };
-    roster.forEach((s) => n[markOf(rec, d, s.id)]++);
+    roster.forEach((s) => n[markOf(rec, d, s.id, sugg)]++);
     return n;
   };
   const countsHTML = (n, showJA) =>
@@ -232,9 +265,13 @@
     const editable = Q.canTakeLesson(c.id, lesson.period, lesson.subjectId);
     const d = editable ? draftOf(v) : null;
     const roster = rosterOf(v);
+    const famMap = famNotices(v.date);
+    const sugg = editable ? suggestionsFor(rec, roster, famMap) : null;
     const ctx = {
       rec,
       d,
+      sugg,
+      notices: famMap,
       classId: c.id,
       justify: can('chamada.justificar'),
       justifyBtn: can('chamada.justificar') && !!rec,
@@ -248,6 +285,22 @@
     const notices = [];
     if (v.conflict && v.conflict.key === keyOf(v))
       notices.push(html`<div class="notice warn">${icon('alert')}<span class="grow"><b>${v.conflict.message}</b> A lista abaixo já mostra a versão salva, com as suas mudanças por cima.</span><button type="button" class="btn sm" data-ch-discard>Descartar as minhas mudanças</button></div>`);
+    const warned = roster.filter((s) => famMap.has(s.id));
+    if (warned.length) {
+      /** "<b>Ana</b>, <b>Bia</b> e <b>Caio</b>" (até 4 nomes; depois "e mais N"). */
+      const namesOf = (list) => {
+        const shown = list.slice(0, list.length > 4 ? 3 : 4).map((s) => html`<b>${U.shortName(s.name)}</b>`);
+        if (list.length > shown.length) return html`${html.join(shown, ', ')} e mais ${list.length - shown.length}`;
+        return shown.length > 1 ? html`${html.join(shown.slice(0, -1), ', ')} e ${shown[shown.length - 1]}` : shown[0];
+      };
+      const names = namesOf(warned);
+      const link = can('mensagens.responder') ? html`<a class="btn sm" href="${warned.length === 1 ? `#mensagens/${famMap.get(warned[0].id).id}` : '#mensagens'}">${icon('message')}${warned.length === 1 ? 'Ver o aviso' : 'Ver mensagens'}</a>` : '';
+      if (sugg) notices.push(html`<div class="notice">${icon('message')}<span class="grow">A família avisou a falta de ${names}: ${warned.length === 1 ? 'já está marcado(a)' : 'já estão marcados'} como falta. Se ${warned.length === 1 ? 'veio' : 'alguém veio'}, toque no nome para mudar.</span>${link}</div>`);
+      else if (rec) {
+        const here = warned.filter((s) => markOf(rec, d, s.id) === 'P');
+        if (here.length) notices.push(html`<div class="notice warn">${icon('alert')}<span class="grow">A família avisou a falta de ${namesOf(here)}, mas ${here.length === 1 ? 'está' : 'estão'} como presente nesta chamada. Confira.</span>${link}</div>`);
+      } else notices.push(html`<div class="notice">${icon('message')}<span class="grow">A família avisou a falta de ${names} neste dia.</span>${link}</div>`);
+    }
     if (!editable && registrar && mode === 'por_aula' && Q.myClasses().some((x) => x.id === c.id))
       notices.push(html`<div class="notice">${icon('lock')}<span class="grow">Esta aula é de ${t ? t.name : 'outro(a) professor(a)'}. Só ${t ? U.firstName(t.name) : 'quem dá a aula'} e a coordenação registram a chamada dela.</span></div>`);
     const prev = editable && mode === 'por_aula' ? lessons.filter((p) => p.period < lesson.period && p.subjectId === lesson.subjectId && Q.attendance(c.id, v.date, p.period)).pop() : null;
@@ -278,7 +331,7 @@
         : ''}
     </section>`);
     if (editable && roster.length) {
-      const n = counts(roster, rec, d);
+      const n = counts(roster, rec, d, sugg);
       const dirty = isDirty(rec, d);
       parts.push(html`<div class="savebar pd-savebar" role="region" aria-label="Resumo da chamada">
         <div class="counts" id="ch-counts" aria-live="polite">${countsHTML(n, ctx.justify)}</div>
@@ -302,13 +355,16 @@
     const editable = Q.canTakeLesson(c.id, lesson.period, lesson.subjectId) && (Q.attendanceMode(c.id) !== 'por_aula' || lessons.length > 0);
     const rec = () => Q.attendance(v.classId, v.date, v.period || 0);
     const justify = can('chamada.justificar');
+    const famMap = famNotices(v.date);
+    /** Sugestões dos avisos das famílias (só enquanto a chamada não foi salva). */
+    const sugg = () => (editable ? suggestionsFor(rec(), rosterOf(v), famMap) : null);
 
     const paint = () => {
       const r = rec();
       const d = draftOf(v);
       const roster = rosterOf(v);
       const box = UI.$('#ch-counts', el);
-      if (box) UI.setHTML(box, countsHTML(counts(roster, r, d), justify));
+      if (box) UI.setHTML(box, countsHTML(counts(roster, r, d, sugg()), justify));
       const btn = UI.$('[data-ch-save]', el);
       if (btn) {
         const dirty = isDirty(r, d);
@@ -336,7 +392,12 @@
       if (who && s) who.setAttribute('aria-label', `${s.name}: ${MARKS[mark].label.toLowerCase()}. Toque para alternar entre presente e falta.`);
       if (justify) {
         const row = UI.$('.pd-reason-row', li);
-        if ((mark === 'J' || mark === 'A') && !row && s) li.insertAdjacentHTML('beforeend', String(reasonRow(s, reasonOf(rec(), d, sid))));
+        if ((mark === 'J' || mark === 'A') && !row && s) {
+          // com aviso da família, o motivo já vem preenchido (dá para mudar)
+          const fam = famMap.get(sid);
+          if (fam && !reasonOf(rec(), d, sid)) d.reasons[sid] = noticeJustification(fam);
+          li.insertAdjacentHTML('beforeend', String(reasonRow(s, reasonOf(rec(), d, sid))));
+        }
         else if (mark !== 'J' && mark !== 'A' && row) {
           row.remove();
           delete d.reasons[sid];
@@ -354,7 +415,7 @@
     const save = async (btn) => {
       const r = rec();
       const d = draftOf(v);
-      const ch = changes(r, d);
+      const ch = changes(r, d, sugg());
       const input = { classId: v.classId, date: v.date, period: v.period || 0, marks: ch.marks };
       input.baseAt = d ? (d.rebase ? (r ? r.at : null) : d.baseAt) : r ? r.at : null;
       if (ch.content !== undefined) input.content = ch.content;
@@ -428,15 +489,16 @@
       const mk = e.target.closest('[data-ch-mark]');
       if (li && mk) return setMark(li, mk.dataset.chMark);
       if (li && e.target.closest('[data-ch-toggle]')) {
-        const cur = markOf(rec(), draftOf(v), li.dataset.sid);
+        const cur = markOf(rec(), draftOf(v), li.dataset.sid, sugg());
         return setMark(li, cur === 'P' ? 'F' : 'P');
       }
       const jb = e.target.closest('[data-ch-justify]');
       if (jb) return Actions.justificarFalta({ classId: v.classId, date: v.date, period: v.period || 0, studentId: jb.dataset.chJustify });
       if (e.target.closest('[data-ch-all]')) {
         const list = rows();
-        const kept = list.filter((x) => ['J', 'A'].includes(markOf(rec(), draftOf(v), x.dataset.sid))).length;
-        list.forEach((x) => markOf(rec(), draftOf(v), x.dataset.sid) === 'F' && setMark(x, 'P'));
+        const sg = sugg();
+        const kept = list.filter((x) => ['J', 'A'].includes(markOf(rec(), draftOf(v), x.dataset.sid, sg))).length;
+        list.forEach((x) => markOf(rec(), draftOf(v), x.dataset.sid, sg) === 'F' && setMark(x, 'P'));
         UI.toast(kept ? `Todos presentes, exceto ${U.plural(kept, 'falta justificada ou abonada', 'faltas justificadas ou abonadas')}.` : 'Todos marcados como presentes.', { ic: 'check' });
         return;
       }
@@ -559,11 +621,13 @@
     if (!list.length) return UI.toast('Não há falta registrada para este aluno nesse dia.', { tone: 'bad' });
     const cur = list.find((x) => x.period === period) || list[0];
     const many = list.length > 1;
+    const fam = famNotices(date).get(studentId);
     UI.modal({
       title: 'Justificar falta',
       sub: html`${s.name} · ${U.cap(U.fmtDateLong(date))}`,
       size: 'sm',
       body: html`<form class="form-section pd-just" novalidate>
+        ${fam ? html`<div class="notice pd-just-fam">${icon(fam.kind === 'atestado' ? 'file' : 'message')}<span class="grow"><b>${noticeLabel(fam)}${noticeWhen(fam)}</b>${fam.reason && fam.kind !== 'atestado' ? html`: “${fam.reason}”` : fam.kind === 'atestado' ? ' (anexo na mensagem)' : ''}</span>${can('mensagens.responder') ? html`<a class="btn sm" href="#mensagens/${fam.id}" data-close>Ver</a>` : ''}</div>` : ''}
         ${many
           ? html`<div class="field" data-field="scope"><span class="label">Quais faltas</span><div class="chips" role="radiogroup" aria-label="Quais faltas">
               <label class="chip"><input type="radio" name="scope" value="all" checked>Todas do dia (${list.length})</label>
@@ -577,7 +641,7 @@
             ['F', 'Sem justificativa', 'Volta a ser falta comum e o motivo é apagado.'],
           ].map(([k, t, h]) => html`<label class="pick"><input type="radio" name="mark" value="${k}" ${(cur.mark === 'F' ? 'J' : cur.mark) === k ? raw('checked') : ''}><strong>${t}</strong><span>${h}</span></label>`)}
         </div></div>
-        <div class="field" data-field="reason"><label for="pj-reason">Motivo <span class="req">*</span></label><textarea id="pj-reason" class="input" rows="3" maxlength="300" placeholder="Ex.: atestado médico de 2 dias">${cur.reason}</textarea><span class="hint">Aparece para a equipe na chamada e na frequência do aluno.</span></div>
+        <div class="field" data-field="reason"><label for="pj-reason">Motivo <span class="req">*</span></label><textarea id="pj-reason" class="input" rows="3" maxlength="300" placeholder="Ex.: atestado médico de 2 dias">${cur.reason || (fam ? noticeJustification(fam) : '')}</textarea><span class="hint">Aparece para a equipe na chamada e na frequência do aluno.</span></div>
         <button type="submit" hidden></button>
       </form>`,
       foot: html`<button type="button" class="btn" data-close>Cancelar</button><button type="button" class="btn primary" data-pj-save>${icon('check')}Salvar</button>`,
@@ -698,13 +762,16 @@
   // =====================================================================
   // Painel
   // =====================================================================
-  const todoItems = (todo, date) =>
-    html`<ul class="items pd-w-list">${todo.slice(0, 5).map((x) => {
+  const todoItems = (todo, date) => {
+    const famMap = famNotices(date);
+    return html`<ul class="items pd-w-list">${todo.slice(0, 5).map((x) => {
       const first = x.missing[0];
       const label = x.missing.length === 1 ? lessonLabel(first.period, first.subjectId) : `${x.missing.length} aulas sem chamada (${x.missing.map((p) => p.period + 'ª').join(', ')})`;
-      return html`<li><span class="pd-w-ic">${icon('checkSquare')}</span><div class="grow"><b>${x.klass.name}</b><div class="person-sub">${label}</div></div>
+      const warned = famMap.size ? Q.roster(x.klass.id).filter((s) => famMap.has(s.id)).length : 0;
+      return html`<li><span class="pd-w-ic">${icon('checkSquare')}</span><div class="grow"><b>${x.klass.name}</b><div class="person-sub">${label}${warned ? html` · <span class="pd-w-fam">${icon('message')}${U.plural(warned, 'falta avisada pela família', 'faltas avisadas pela família')}</span>` : ''}</div></div>
         <button type="button" class="btn sm" data-w-roll="${x.klass.id}" data-w-date="${date}" data-w-period="${first.period}">Fazer</button></li>`;
     })}</ul>${todo.length > 5 ? html`<p class="small muted">e mais ${U.plural(todo.length - 5, 'turma', 'turmas')}.</p>` : ''}`;
+  };
 
   App.widget({
     id: 'chamadas-pendentes',
