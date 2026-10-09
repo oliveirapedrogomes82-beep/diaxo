@@ -39,7 +39,11 @@
       chargesFees: (v1.invoices || []).length > 0 || Number(old.defaultFee) > 0,
     });
     st.settings.terms = { [year]: { 1: {}, 2: {}, 3: {}, 4: {} } };
-    for (const s of Object.values(st.settings.segments)) s.minAttendance = Number(old.minAttendance) || s.minAttendance;
+    // a versão anterior só tinha chamada diária: todas as etapas começam assim (a escola muda para "por aula" depois, se quiser)
+    for (const s of Object.values(st.settings.segments)) {
+      s.minAttendance = Number(old.minAttendance) || s.minAttendance;
+      s.attendance = 'diaria';
+    }
 
     st.subjects = (v1.subjects || []).map((s) => ({ id: nid('s', s.id), name: String(s.name || 'Disciplina').slice(0, 60), short: String(s.short || '').slice(0, 12), color: Number(s.color) || 1, weekly: Number(s.weekly) || 0 }));
     st.users = (v1.teachers || []).map((t) => ({

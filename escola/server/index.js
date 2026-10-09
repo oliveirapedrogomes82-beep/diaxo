@@ -93,7 +93,7 @@ if (DEMO) {
 
 const state = Core.schema.emptyState();
 if (DEMO) {
-  const { state: demo, meta } = Core.seed.demoWithMeta(Core.util.today('America/Sao_Paulo'));
+  const { state: demo, meta } = Core.seed.demoWithMeta(Core.util.today('America/Sao_Paulo'), new Date().toISOString());
   Object.assign(state, demo);
   db.replaceState(state);
   for (const [uid, at] of Object.entries(meta.logins)) db.setLastLogin(uid, at);

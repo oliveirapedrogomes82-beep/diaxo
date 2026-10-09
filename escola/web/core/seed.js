@@ -168,7 +168,7 @@
    * Escola de exemplo completa. Devolve { state, meta } — `meta` traz o que fica fora do estado
    * (últimos acessos, aceites de privacidade e leituras "visualizado").
    */
-  const demoWithMeta = (today = util.today()) => {
+  const demoWithMeta = (today = util.today(), now = null) => {
     const r = util.rng(20260214);
     const T = today;
     const st = empty(T);
@@ -590,8 +590,39 @@
     st.plans.push({ id: num('l', 1), studentId: A(70).id, title: 'Plano de acompanhamento — leitura e escrita', status: 'ativo', start: addDays(T, -40), goals: 'Ampliar a fluência leitora e a autonomia na leitura de enunciados.', adaptations: 'Ler os enunciados em voz alta nas avaliações; tempo adicional de 20 minutos; uma pergunta por item.', sharedWith: { professores: true, coordenacao: true, familia: true }, authorId: ppd, updatedAt: stamp(addDays(T, -10), 11), familyAckAt: stamp(addDays(T, -8), 20) });
     st.plans.push({ id: num('l', 2), studentId: A(85).id, title: 'Plano de acompanhamento — atenção e organização', status: 'ativo', start: addDays(T, -60), goals: 'Apoiar a organização dos estudos e a atenção nas aulas expositivas.', adaptations: 'Sentar nas primeiras fileiras, longe da porta; dividir tarefas longas em etapas; avisar com antecedência as mudanças de rotina.', sharedWith: { professores: true, coordenacao: true, familia: false }, authorId: psi, updatedAt: stamp(addDays(T, -20), 11) });
 
+    // com o relógio real (demonstração ao vivo), nada pode ter acontecido "no futuro": instantes de hoje depois de agora
+    // voltam para alguns minutos antes (determinístico); horários de envio agendado (publishAt) ficam como estão
+    if (now) clampToNow(st, meta, now);
     return { state: st, meta };
   };
+  const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/;
+  const KEEP_FUTURE = new Set(['publishAt', 'expiresAt', 'validUntil']);
+  function clampToNow(st, meta, now) {
+    const nowMs = Date.parse(now);
+    const MIN = 60000;
+    // mapeia [agora, agora+24h] em [agora−3h, agora−5min], preservando a ordem entre os horários
+    const fix = (v) => {
+      if (typeof v !== 'string' || !INSTANT.test(v)) return v;
+      const t = Date.parse(v);
+      if (t <= nowMs) return v;
+      const frac = Math.min(1, (t - nowMs) / (24 * 60 * MIN));
+      return new Date(Math.round(nowMs - 180 * MIN + frac * 175 * MIN)).toISOString();
+    };
+    const walk = (o, depth = 0) => {
+      if (!o || typeof o !== 'object' || depth > 8) return;
+      for (const key of Object.keys(o)) {
+        const v = o[key];
+        if (typeof v === 'string') {
+          if (!KEEP_FUTURE.has(key)) o[key] = fix(v);
+        } else walk(v, depth + 1);
+      }
+    };
+    walk(st);
+    for (const id of Object.keys(meta.logins || {})) meta.logins[id] = fix(meta.logins[id]);
+    for (const c of Object.values(meta.consents || {})) if (c) c.at = fix(c.at);
+    (meta.reads || []).forEach((r) => (r[2] = fix(r[2])));
+  }
+
   const demo = (today) => demoWithMeta(today).state;
 
   /** Contas exibidas em "Entrar como…" na demonstração. */

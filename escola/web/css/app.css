@@ -951,3 +951,32 @@ button.link { border: 0; background: none; padding: 0; color: var(--accent-text)
 
 /* sessão vencida: a tela com dados fica escondida enquanto a senha é pedida */
 body.locked #app { visibility: hidden; }
+
+/* contraste: texto sobre vermelho (claro: branco; escuro: quase preto sobre o rosa) */
+:root { --on-bad: #ffffff; }
+:root[data-theme="dark"] { --on-bad: #2a0a0e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --on-bad: #2a0a0e; } }
+.badge.bad, .btn.danger.solid { color: var(--on-bad); }
+
+/* a coluna da página nunca cresce além da tela (selects e nomes longos) */
+.page { grid-template-columns: minmax(0, 1fr); }
+select.input { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.page-head > * { min-width: 0; }
+.page-head h1 { overflow-wrap: anywhere; }
+
+/* menu lateral em telas baixas (notebook): itens mais compactos e marca fixa no topo */
+.sidebar .brand { position: sticky; top: calc(-14px - env(safe-area-inset-top, 0px)); background: var(--side-bg); z-index: 1; }
+@media (max-height: 900px) {
+  .side-link { padding: 5px 10px; }
+  .side-link .i { width: 26px; height: 26px; padding: 5px; }
+  .nav-group { margin-top: 6px; }
+  .nav-title { padding: 4px 10px; }
+}
+
+/* "ver como" é somente leitura: some o que grava */
+.is-preview main .btn.primary:not(a), .is-preview main .savebar, .is-preview main [data-write] { display: none !important; }
+.is-preview main textarea, .is-preview main table .input { pointer-events: none; opacity: .7; }
+
+/* primeira carga (antes do app) */
+.boot { min-height: 100vh; min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 16px; color: var(--fg-3); background: var(--bg); font-family: var(--font-body); }
+.boot .brand-mark { --side-bg: #141a3a; }

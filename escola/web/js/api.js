@@ -216,7 +216,7 @@ const Api = (() => {
     };
 
     const fresh = () => {
-      const { state: st, meta: m } = Seed.demoWithMeta(util.today('America/Sao_Paulo'));
+      const { state: st, meta: m } = Seed.demoWithMeta(util.today('America/Sao_Paulo'), new Date().toISOString());
       state = st;
       meta = { logins: { ...m.logins }, consents: { ...m.consents }, reads: {} };
       for (const [item, uid, at] of m.reads) (meta.reads[item] = meta.reads[item] || {})[uid] = at;
@@ -556,10 +556,6 @@ const Api = (() => {
       },
       async cmd(name, input, requestId, password) {
         await ready;
-        if (stale) {
-          await loadFromDb();
-          stale = false;
-        }
         const u = needUser();
         const spec = E.get(name);
         if (!spec) fail('not_found', 'Ação desconhecida. Atualize a página.', 404);
@@ -747,6 +743,28 @@ const Api = (() => {
         return { ok: true };
       },
     };
+    /**
+     * Várias abas da demonstração: cada gravação acontece com uma trava entre abas; antes de executar, se outra aba
+     * gravou depois (revisão no IndexedDB maior), recarrega; depois de executar, grava na hora.
+     */
+    const withWriteLock = (fn) => {
+      const run = async () => {
+        await ready;
+        const savedRev = Number(await idbGet('rev')) || 0;
+        if (stale || savedRev > rev) {
+          await loadFromDb();
+          stale = false;
+        }
+        const out = await fn();
+        await flush();
+        return out;
+      };
+      return typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request ? navigator.locks.request('caderneta-demo-escrita', run) : run();
+    };
+    for (const k of ['cmd', 'undo', 'read', 'uploadFile', 'supportRead', 'password', 'consent', 'inviteAccept', 'importBackup']) {
+      const fn = api[k];
+      api[k] = (...args) => withWriteLock(() => fn(...args));
+    }
     return api;
   };
 

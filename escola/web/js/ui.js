@@ -567,7 +567,7 @@ const UI = (() => {
     const msg = `Olá, ${first}! ${reset ? 'Use este código para criar uma nova senha' : `Seu acesso à Caderneta da ${school} está pronto. Para entrar pela primeira vez`}: abra ${link} e digite o código ${effect.code}. O código vale até ${U.fmtInstant(effect.expiresAt)} e só pode ser usado uma vez.`;
     return modal({
       title: reset ? 'Código para nova senha' : 'Código de primeiro acesso',
-      sub: html`Para <b>${person.name || ''}</b>. Ele aparece só agora: envie pelo WhatsApp, e-mail ou entregue impresso.`,
+      sub: html`Código para <b>${person.name || ''}</b>. Este código só aparece agora: envie pelo WhatsApp, por e-mail ou entregue impresso.`,
       size: 'sm',
       guard: false,
       body: html`<div class="invite-code" aria-label="Código">${effect.code}</div>

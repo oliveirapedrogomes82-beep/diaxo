@@ -97,3 +97,13 @@ test('demo.html é o index.html com o modo demonstração', () => {
   assert.equal(demo, demoHtml(index), 'rode: node tools/sync-demo.js');
   assert.ok(!index.includes('demo-mode.js'), 'o index.html do servidor nunca liga a demonstração');
 });
+
+test('migração da v1: chamada diária continua valendo em todas as etapas', () => {
+  const v1 = { settings: { schoolName: 'Escola V1', year: 2026, term: 3, minAttendance: 75 }, subjects: [], teachers: [], classes: [{ id: 'c4', name: '6º ano A', shift: 'Manhã', subjects: {}, schedule: [] }], students: [{ id: 'a1', name: 'Aluno', classId: 'c4', status: 'ativo', guardian: { name: 'Mãe', phone: '' } }], attendance: { 'c4|2026-10-07': { a1: 'P' } }, grades: {}, invoices: [], events: [], notices: [] };
+  const Core = require('../web/core');
+  assert.ok(Core.migrate.isV1(v1));
+  const st = Core.migrate.fromV1(v1, { today: '2026-10-08', now: '2026-10-08T12:00:00.000Z', newId: (p) => Core.util.uid(p) });
+  for (const seg of Object.values(st.settings.segments)) assert.equal(seg.attendance, 'diaria');
+  const k = Object.keys(st.attendance)[0];
+  assert.ok(k && k.endsWith('|0'));
+});

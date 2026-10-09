@@ -155,6 +155,25 @@ const App = (() => {
     });
   };
 
+  /** Dados da versão anterior (guardados no navegador): nunca apagados, sempre oferecidos para baixar. */
+  const V1_KEY = 'caderneta.escola.v1';
+  const v1Data = () => {
+    try {
+      const raw = localStorage.getItem(V1_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return d && Array.isArray(d.students) ? d : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const downloadV1 = () => {
+    const d = v1Data();
+    if (!d) return;
+    U.download(`caderneta-versao-anterior-${U.today()}.json`, JSON.stringify({ app: 'caderneta-escolar', exportedAt: new Date().toISOString(), data: d }), 'application/json');
+    UI.toast('Arquivo baixado. Importe na Caderneta da escola pela conta titular.', { ic: 'download', ms: 7000 });
+  };
+
   const loginScreen = (info = sessionInfo || {}) => {
     const school = (info.school && info.school.name) || '';
     const accounts = info.accounts || [];
@@ -178,16 +197,19 @@ const App = (() => {
         <button type="submit" class="btn primary block">Entrar</button>
       </form>
       <div class="auth-links"><a href="#acesso">Tenho um código de acesso</a><button type="button" class="link" data-forgot>Esqueci minha senha</button></div>
+      ${v1Data() ? html`<div class="notice warn">${icon('download')}<span class="grow"><b>Há dados da versão anterior neste navegador.</b> Baixe o arquivo e importe na Caderneta da escola (Configurações → Backup e dados → Importar, pela conta titular). Nada é apagado.</span><button type="button" class="btn sm" data-v1-download>Baixar dados</button></div>` : ''}
       ${accounts.length
         ? html`<div class="demo-accounts"><h2>${icon('sparkles')}Demonstração: entrar como…</h2><p class="small muted">Cada pessoa vê só o que o cargo e os acessos permitem.</p>
           <div class="account-list">${accounts.map(
-            (a) => html`<button type="button" class="account-btn" data-as="${a.id}">${UI.avatar(a.name, 'sm')}<span class="grow"><b>${a.name}</b><span>${a.title || Q.roleLabel(a.role)}${ROLE_HINT[a.role] ? html` · ${ROLE_HINT[a.role]}` : ''}</span></span>${icon('chevronRight')}</button>`,
+            (a) => html`<button type="button" class="account-btn" data-as="${a.id}">${UI.avatar(a.name, 'sm')}<span class="grow"><b>${a.name}</b><span>${a.title || Q.roleLabel(a.role)}${/infantil/i.test(a.title || '') ? html` · só a própria turma: chamada, rotina do dia, pareceres e agenda` : ROLE_HINT[a.role] ? html` · ${ROLE_HINT[a.role]}` : ''}</span></span>${icon('chevronRight')}</button>`,
           )}</div>
           ${Api.isLocal ? html`<button type="button" class="btn ghost sm" data-reset-demo>${icon('refresh')}Recomeçar a demonstração</button>` : ''}</div>`
         : ''}`,
       { wide: accounts.length > 0 },
     );
     const form = el.querySelector('form');
+    const v1Btn = el.querySelector('[data-v1-download]');
+    v1Btn && v1Btn.addEventListener('click', downloadV1);
     el.querySelector('[data-show-pass]').addEventListener('click', (e) => {
       const input = el.querySelector('#lg-pass');
       input.type = input.type === 'password' ? 'text' : 'password';
@@ -476,6 +498,36 @@ const App = (() => {
     return o.n ? html`<span class="badge ${o.tone || ''}" title="${o.title || ''}">${o.n > 99 ? '99+' : o.n}</span>` : '';
   };
 
+  /** Barra inferior do celular: as 4 áreas de trabalho mais usadas por quem está usando (depende do cargo). */
+  const TAB_PRIORITY = {
+    financeiro: ['painel', 'financeiro', 'alunos', 'relatorios'],
+    psicologo: ['painel', 'atendimentos', 'alunos', 'agenda'],
+    psicopedagogo: ['painel', 'atendimentos', 'alunos', 'agenda'],
+    orientador: ['painel', 'atendimentos', 'agenda', 'alunos'],
+    assistente_social: ['painel', 'atendimentos', 'mensagens', 'alunos'],
+    aee: ['painel', 'agenda', 'atendimentos', 'alunos'],
+    secretaria: ['painel', 'alunos', 'mensagens', 'chamada'],
+    aux_secretaria: ['painel', 'alunos', 'mensagens', 'chamada'],
+    portaria: ['painel', 'mensagens', 'alunos', 'calendario'],
+    enfermagem: ['painel', 'mensagens', 'alunos', 'calendario'],
+    coordenador: ['painel', 'agenda', 'chamada', 'notas'],
+    professor: ['painel', 'chamada', 'agenda', 'notas'],
+    auxiliar: ['painel', 'agenda', 'rotina', 'chamada'],
+    diretor: ['painel', 'agenda', 'alunos', 'financeiro'],
+  };
+  const tabbarPages = (list) => {
+    if (Store.family) return list.filter((p) => p.tab != null).sort((a, b) => a.tab - b.tab).slice(0, 4);
+    const byId = new Map(list.map((p) => [p.id, p]));
+    let pref = (TAB_PRIORITY[Store.me.role] || []).slice();
+    // professora da Educação Infantil: rotina do dia no lugar das notas
+    if (byId.has('rotina') && Q.myClasses().some((c) => Q.evaluation(c.id) === 'parecer') && !Q.myClasses().some((c) => Q.evaluation(c.id) === 'nota')) pref = pref.map((id) => (id === 'notas' ? 'rotina' : id));
+    const out = [];
+    for (const id of pref) if (byId.has(id) && !out.includes(byId.get(id))) out.push(byId.get(id));
+    for (const p of list.filter((x) => x.tab != null).sort((a, b) => a.tab - b.tab)) if (out.length < 4 && !out.includes(p)) out.push(p);
+    for (const p of list) if (out.length < 4 && !out.includes(p)) out.push(p);
+    return out.slice(0, 4);
+  };
+
   const renderNav = () => {
     const [name] = route();
     const list = visiblePages().filter(inNav);
@@ -488,7 +540,7 @@ const App = (() => {
         return items.length ? html`<div class="nav-group">${Store.family ? '' : html`<div class="nav-title">${g}</div>`}${items.map(link)}</div>` : '';
       }),
     );
-    const tabs = list.filter((p) => p.tab != null).sort((a, b) => a.tab - b.tab).slice(0, 4);
+    const tabs = tabbarPages(list);
     UI.setHTML(
       $('tabbar'),
       html`${tabs.map((p) => html`<a href="#${p.id}" class="${name === p.id ? 'active' : ''}">${icon(p.icon || 'grid')}<span>${p.short || p.label}</span>${badgeHTML(p)}</a>`)}<button type="button" data-act="open-menu">${icon('menu')}<span>Mais</span></button>`,
@@ -508,7 +560,10 @@ const App = (() => {
   const renderBanner = () => {
     const parts = [];
     if (Store.preview) {
-      parts.push(html`<div class="notice preview">${icon('eye')}<span class="grow">Você está vendo o sistema como <b>${Store.preview.name}</b> (${Store.preview.roleLabel}). Somente leitura.</span><button type="button" class="btn sm" data-act="end-preview">Voltar para a minha conta</button></div>`);
+      const pv = Store.preview;
+      const kids = pv.family ? Q.students({ status: 'todos' }).filter((x) => (pv.studentIds || []).includes(x.id)).map((x) => U.firstName(x.name)) : [];
+      const who = pv.family ? (kids.length ? `responsável por ${kids.join(' e ')}` : 'família') : pv.title || pv.roleLabel;
+      parts.push(html`<div class="notice preview">${icon('eye')}<span class="grow">Você está vendo o sistema como <b>${pv.name}</b> — ${who}. Somente leitura.</span><button type="button" class="btn sm" data-act="end-preview">Voltar para a minha conta</button></div>`);
     }
     if (!Store.online) parts.push(html`<div class="notice warn">${icon('alert')}<span class="grow">Sem conexão com o servidor. O que aparece pode estar desatualizado; tentaremos de novo sozinhos.</span><button type="button" class="btn sm" data-act="retry">Tentar agora</button></div>`);
     if (Api.isLocal && Api.persistent === false) parts.push(html`<div class="notice warn">${icon('alert')}<span class="grow">Este navegador não está guardando os dados da demonstração (janela anônima ou armazenamento bloqueado). Ao fechar, tudo volta ao início.</span></div>`);
@@ -541,7 +596,14 @@ const App = (() => {
       UI.setHTML(el, UI.empty({ icon: 'info', title: 'Tela não encontrada', text: 'O endereço pode estar incompleto. Volte para o início.', action: html`<a class="btn primary" href="#${homeId()}">Ir para o início</a>` }));
       ok = false;
     } else if (!allowed(p)) {
-      UI.setHTML(el, UI.empty({ icon: 'lock', title: 'Sem acesso a esta tela', text: 'O seu perfil não inclui esta área. Se precisar, peça à direção para liberar o acesso.', action: html`<a class="btn primary" href="#${homeId()}">Ir para o início</a>` }));
+      let d = null;
+      try {
+        d = p.denied ? p.denied(rest) : null;
+      } catch (e) {
+        d = null;
+      }
+      const text = d && d.text ? d.text : Store.preview ? 'A pessoa que você está vendo não tem acesso a esta área.' : Store.family ? 'Esta área não está disponível para a sua família.' : Store.can('usuarios.gerenciar') ? 'Esta área não faz parte do seu perfil de acesso. Para mudar, vá em Equipe e acessos → Perfis de acesso.' : 'O seu perfil não inclui esta área. Se precisar, peça à direção para liberar o acesso.';
+      UI.setHTML(el, UI.empty({ icon: 'lock', title: (d && d.title) || 'Sem acesso a esta tela', text, action: html`<a class="btn primary" href="#${homeId()}">Ir para o início</a>` }));
       ok = false;
     } else {
       try {
@@ -561,6 +623,7 @@ const App = (() => {
         console.error(err);
       }
     }
+    appEl().classList.toggle('is-preview', !!Store.preview);
     renderNav();
     renderBanner();
     let title = p ? p.label : 'Caderneta';
@@ -747,8 +810,10 @@ const App = (() => {
   };
 
   /** "Ver como": mostra o sistema do jeito que a pessoa vê (somente leitura). */
+  let previewReturn = 'equipe';
   const previewAs = async (userId) => {
     try {
+      if (!Store.preview) previewReturn = location.hash.replace(/^#/, '') || 'equipe';
       await Store.startPreview(userId);
       current = '';
       location.hash = homeId();
@@ -760,7 +825,7 @@ const App = (() => {
   const endPreview = async () => {
     await Store.endPreview();
     current = '';
-    location.hash = 'equipe';
+    location.hash = previewReturn || 'equipe';
     render();
   };
 
@@ -964,6 +1029,6 @@ const App = (() => {
   return {
     page, studentTab, widget, action, searchProvider, allowed,
     pages: visiblePages, studentTabs: allowedStudentTabs, widgets: allowedWidgets, actions: allowedActions,
-    go, render, route, homeId, palette, help, relogin, sessionExpired, logout, previewAs, endPreview, privacyNotice, myAccount, getTheme, setTheme,
+    go, render, route, homeId, palette, help, relogin, sessionExpired, logout, previewAs, endPreview, privacyNotice, myAccount, getTheme, setTheme, v1Data, downloadV1,
   };
 })();
